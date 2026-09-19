@@ -26,15 +26,16 @@ async fn main() -> anyhow::Result<()> {
 
     env_logger::init();
 
-    // This will include your eBPF object file as raw bytes at compile-time
+    // This will include the eBPF object file as raw bytes at compile-time
     // and load it at runtime.
     let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
         env!("OUT_DIR"),
         "/noct"
     )))?;
+
     match EbpfLogger::init(&mut ebpf) {
         Err(e) => {
-            // This can happen if you remove all log statements from your eBPF program.
+            // This can happen if all log statements are removed from the eBPF program.
             warn!("failed to initialize eBPF logger: {e}");
         }
         Ok(logger) => {
@@ -48,13 +49,21 @@ async fn main() -> anyhow::Result<()> {
             });
         }
     }
+
     let Opt { cgroup_path } = opt;
     let cgroup = File::open(&cgroup_path).with_context(|| format!("{}", cgroup_path.display()))?;
-    let program: &mut CgroupSkb = ebpf.program_mut("noct").unwrap().try_into()?;
-    program.load()?;
-    program.attach(
-        cgroup,
+    let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
+    ingress_program.load()?;
+    ingress_program.attach(
+        cgroup.try_clone()?,
         CgroupSkbAttachType::Ingress,
+        CgroupAttachMode::default(),
+    )?;
+    let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
+    egress_program.load()?;
+    egress_program.attach(
+        cgroup,
+        CgroupSkbAttachType::Egress,
         CgroupAttachMode::default(),
     )?;
 
