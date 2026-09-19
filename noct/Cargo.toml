@@ -11,7 +11,6 @@ noct-common = { path = "../common", features = ["user"] }
 anyhow = { workspace = true, default-features = true }
 aya = { workspace = true }
 aya-log = { workspace = true }
-env_logger = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true, features = [
@@ -21,6 +20,9 @@ tokio = { workspace = true, features = [
     "net",
     "signal",
 ] }
+tracing = { workspace = true }
+tracing-panic = { workspace = true }
+tracing-subscriber = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 [build-dependencies]
 anyhow = { workspace = true }

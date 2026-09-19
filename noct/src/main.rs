@@ -24,7 +24,7 @@ struct Opt {
 async fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
 
-    env_logger::init();
+    noct::init_tracing();
 
     // This will include the eBPF object file as raw bytes at compile-time
     // and load it at runtime.
