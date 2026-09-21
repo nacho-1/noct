@@ -42,7 +42,7 @@ be dual licensed as above, without any additional terms or conditions.
 
 ### eBPF
 
-All eBPF code (`ebpf`) is distributed under either the terms of the
+All eBPF code (`ebpf`) is distributed under the terms of the
 [GNU General Public License, Version 2].
 
 [Apache license]: LICENSE-APACHE
