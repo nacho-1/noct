@@ -1,10 +1,11 @@
-use std::fs::File;
+use std::{fs::File, mem::MaybeUninit};
 
 use anyhow::Context as _;
-use aya::{Ebpf, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
+use aya::{Ebpf, maps::{PerfEventArray, perf::PerfEvent}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
 use aya_log::EbpfLogger;
 use clap::Parser;
-use log::{warn};
+use log::{debug, warn};
+use noct_common::PacketEvent;
 use tokio::{io::{Interest, unix::AsyncFd}, signal::{self, unix::SignalKind}};
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -14,6 +15,18 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 pub struct Opts {
     #[clap(short, long, default_value = "/sys/fs/cgroup")]
     cgroup_path: std::path::PathBuf,
+}
+
+/// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
+fn as_bytes_mut<T>(slot: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
+    // SAFETY: MaybeUninit<u8> imposes no validity invariants on its memory.
+    // Means can contain any pattern of bits.
+    unsafe {
+        std::slice::from_raw_parts_mut(
+            slot.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+            size_of::<T>(),
+        )
+    }
 }
 
 /// Initializes tracing.
@@ -86,6 +99,36 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
         CgroupSkbAttachType::Egress,
         CgroupAttachMode::default(),
     )?;
+
+    let mut tx_perf_array = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+
+    for cpu_id in aya::util::online_cpus().map_err(|(_, error)| error)? {
+        let buf = tx_perf_array.open(cpu_id, None)?;
+        let mut buf = AsyncFd::with_interest(buf, Interest::READABLE)?;
+
+        tokio::task::spawn(async move {
+            loop {
+                let mut guard = buf.readable_mut().await.unwrap();
+                guard.get_inner_mut().for_each(|event| match event {
+                    PerfEvent::Sample { head, tail } => {
+                        let mut data = MaybeUninit::<PacketEvent>::uninit();
+                        let bytes = as_bytes_mut(&mut data);
+                        for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
+                            dst.write(*src);
+                        }
+                        let data = unsafe {
+                            data.assume_init()
+                        };
+                        debug!("USERSPACE STATS: {:?}", &data);
+                    }
+                    PerfEvent::Lost { count } => {
+                        warn!("DROPPED {count} SAMPLES")
+                    }
+                });
+                guard.clear_ready();
+            }
+        });
+    }
 
     println!("Waiting for Ctrl-C...");
     shutdown_handler().await;
