@@ -2,12 +2,16 @@
 #![no_main]
 
 use aya_ebpf::{macros::{cgroup_skb, map}, maps::PerfEventArray, programs::SkBuffContext};
-use aya_log_ebpf::{debug, info};
-use network_types::{eth::EtherType, ip::{IpProto, Ipv4Hdr}, tcp::TcpHdr, udp::UdpHdr};
+use aya_log_ebpf::{error, info};
+use network_types::{eth::EtherType, ip::{IpError, IpProto, Ipv4Hdr}, tcp::TcpHdr, udp::UdpHdr};
 use noct_common::PacketEvent;
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
+
+/// Array for transmitting ingress packet stats.
+#[map]
+static RX_STATS: PerfEventArray<PacketEvent> = PerfEventArray::new(0);
 
 /// Array for transmitting egress packet stats.
 #[map]
@@ -15,41 +19,48 @@ static TX_STATS: PerfEventArray<PacketEvent> = PerfEventArray::new(0);
 
 #[cgroup_skb]
 pub fn ingress(ctx: SkBuffContext) -> i32 {
-    match try_ingress(ctx) {
-        Ok(ret) => ret,
-        Err(ret) => ret,
-    }
+    process_skb(ctx, &RX_STATS)
 }
 
-fn try_ingress(ctx: SkBuffContext) -> Result<i32, i32> {
-    info!(&ctx, "received a packet");
+fn _try_ingress(ctx: SkBuffContext) -> Result<i32, i32> {
+    info!(&ctx, "packet ingress");
     Ok(PASS_PKT)
 }
 
 #[cgroup_skb]
 pub fn egress(ctx: SkBuffContext) -> i32 {
-    match try_egress(ctx) {
-        Ok(ret) => ret,
-        Err(ret) => ret,
-    }
+    process_skb(ctx, &TX_STATS)
 }
 
-fn try_egress(ctx: SkBuffContext) -> Result<i32, i32> {
-    info!(&ctx, "sent a packet");
+/// Builds [PacketEvent] from context and outputs it to the array.
+fn process_skb(ctx: SkBuffContext, map: &PerfEventArray<PacketEvent>) -> i32 {
     if ctx.skb.protocol() != u32::from(u16::from(EtherType::Ipv4)) {
-        debug!(&ctx, "non-ipv4 packet");
-        return Ok(PASS_PKT);
+        return PASS_PKT;
     }
-    let ip4hdr = ctx.load::<Ipv4Hdr>(0).map_err(|_| PASS_PKT)?;
-    debug!(&ctx, "SRC IP: {}, DST IP: {}", ip4hdr.src_addr(), ip4hdr.dst_addr());
-    let Ok(protocol) = ip4hdr.proto() else {
-        debug!(&ctx, "bad protocol");
-        return Err(PASS_PKT);
+
+    let ip4hdr = match ctx.load::<Ipv4Hdr>(0) {
+        Ok(ret) => ret,
+        Err(e) => {
+            error!(&ctx, "failed to load IPv4 header: code {}", e);
+            return PASS_PKT;
+        }
+    };
+    let protocol = match ip4hdr.proto() {
+        Ok(ret) => ret,
+        Err(IpError::InvalidProto(n)) => {
+            error!(&ctx, "invalid protocol: {}", n);
+            return PASS_PKT;
+        }
     };
     match protocol {
         IpProto::Tcp => {
-            let tcphdr = ctx.load::<TcpHdr>(usize::from(ip4hdr.ihl()))
-                .map_err(|_| PASS_PKT)?;
+            let tcphdr = match ctx.load::<TcpHdr>(usize::from(ip4hdr.ihl())) {
+                Ok(ret) => ret,
+                Err(e) => {
+                    error!(&ctx, "failed to load TCP header: code {}", e);
+                    return PASS_PKT;
+                }
+            };
             let stats = PacketEvent {
                 src_addr: ip4hdr.src_addr(),
                 dst_addr: ip4hdr.dst_addr(),
@@ -63,8 +74,13 @@ fn try_egress(ctx: SkBuffContext) -> Result<i32, i32> {
             TX_STATS.output(&ctx, &stats, 0);
         }
         IpProto::Udp => {
-            let udphdr = ctx.load::<UdpHdr>(usize::from(ip4hdr.ihl()))
-                .map_err(|_| PASS_PKT)?;
+            let udphdr = match ctx.load::<UdpHdr>(usize::from(ip4hdr.ihl())) {
+                Ok(ret) => ret,
+                Err(e) => {
+                    error!(&ctx, "failed to load UDP header: code {}", e);
+                    return PASS_PKT;
+                }
+            };
             let stats = PacketEvent {
                 src_addr: ip4hdr.src_addr(),
                 dst_addr: ip4hdr.dst_addr(),
@@ -75,11 +91,12 @@ fn try_egress(ctx: SkBuffContext) -> Result<i32, i32> {
                 protocol: u8::from(protocol),
                 _pad: [0; 3],
             };
-            TX_STATS.output(&ctx, &stats, 0);
+            map.output(&ctx, &stats, 0);
         }
         _ => {}
     }
-    Ok(PASS_PKT)
+
+    PASS_PKT
 }
 
 /// Returns the length of the datagram inside an IPv4 packet.

@@ -1,7 +1,7 @@
 use std::{fs::File, mem::MaybeUninit};
 
 use anyhow::Context as _;
-use aya::{Ebpf, maps::{PerfEventArray, perf::PerfEvent}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
+use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::PerfEvent}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
 use aya_log::EbpfLogger;
 use clap::Parser;
 use log::{debug, warn};
@@ -100,10 +100,21 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
         CgroupAttachMode::default(),
     )?;
 
-    let mut tx_perf_array = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+    let rx_array = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let tx_array = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+    consume_event_array(rx_array)?;
+    consume_event_array(tx_array)?;
 
+    println!("Waiting for Ctrl-C...");
+    shutdown_handler().await;
+    println!("Exiting...");
+
+    Ok(())
+}
+
+fn consume_event_array(mut array: PerfEventArray<MapData>) -> anyhow::Result<()> {
     for cpu_id in aya::util::online_cpus().map_err(|(_, error)| error)? {
-        let buf = tx_perf_array.open(cpu_id, None)?;
+        let buf = array.open(cpu_id, None)?;
         let mut buf = AsyncFd::with_interest(buf, Interest::READABLE)?;
 
         tokio::task::spawn(async move {
@@ -129,10 +140,6 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
             }
         });
     }
-
-    println!("Waiting for Ctrl-C...");
-    shutdown_handler().await;
-    println!("Exiting...");
 
     Ok(())
 }
