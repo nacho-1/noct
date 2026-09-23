@@ -13,12 +13,14 @@ aya = { workspace = true }
 aya-log = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
+#thiserror = { workspace = true }
 tokio = { workspace = true, features = [
     "macros",
     "rt",
     "rt-multi-thread",
     "net",
     "signal",
+    "sync",
 ] }
 tracing = { workspace = true }
 tracing-panic = { workspace = true }

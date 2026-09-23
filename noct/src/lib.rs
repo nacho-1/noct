@@ -4,9 +4,9 @@ use anyhow::Context as _;
 use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::PerfEvent}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
 use aya_log::EbpfLogger;
 use clap::Parser;
-use log::{debug, warn};
+use log::{info, warn};
 use noct_common::PacketEvent;
-use tokio::{io::{Interest, unix::AsyncFd}, signal::{self, unix::SignalKind}};
+use tokio::{io::{Interest, unix::AsyncFd}, signal::{self, unix::SignalKind}, sync::mpsc::{self, UnboundedReceiver, UnboundedSender}, task::JoinHandle};
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -100,10 +100,14 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
         CgroupAttachMode::default(),
     )?;
 
-    let rx_array = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
-    let tx_array = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
-    consume_event_array(rx_array)?;
-    consume_event_array(tx_array)?;
+    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+    let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
+    let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
+    read_event_array(ingress_stats_map, ingress_stats_tx)?;
+    read_event_array(egress_stats_map, egress_stats_tx)?;
+    log_events(ingress_stats_rx);
+    log_events(egress_stats_rx);
 
     println!("Waiting for Ctrl-C...");
     shutdown_handler().await;
@@ -112,12 +116,25 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn consume_event_array(mut array: PerfEventArray<MapData>) -> anyhow::Result<()> {
+/// Reads the event array and pushes the events into a channel.
+///
+/// The functions spawns a task for each online CPU to read the array,
+/// since there's one per CPU.
+/// Returns the handles to the tasks.
+/// The tasks will exit normally if the receiving side of the channel
+/// is closed, but may panic under exceptional circumstances.
+fn read_event_array(
+    mut array: PerfEventArray<MapData>,
+    sender: UnboundedSender<PacketEvent>,
+) -> anyhow::Result<Vec<JoinHandle<()>>> {
+    let mut handles = Vec::new();
+
     for cpu_id in aya::util::online_cpus().map_err(|(_, error)| error)? {
         let buf = array.open(cpu_id, None)?;
         let mut buf = AsyncFd::with_interest(buf, Interest::READABLE)?;
+        let tx = sender.clone();
 
-        tokio::task::spawn(async move {
+        let handle = tokio::spawn(async move {
             loop {
                 let mut guard = buf.readable_mut().await.unwrap();
                 guard.get_inner_mut().for_each(|event| match event {
@@ -130,7 +147,9 @@ fn consume_event_array(mut array: PerfEventArray<MapData>) -> anyhow::Result<()>
                         let data = unsafe {
                             data.assume_init()
                         };
-                        debug!("USERSPACE STATS: {:?}", &data);
+                        if let Err(_) = tx.send(data) {
+                            return;
+                        }
                     }
                     PerfEvent::Lost { count } => {
                         warn!("DROPPED {count} SAMPLES")
@@ -139,9 +158,19 @@ fn consume_event_array(mut array: PerfEventArray<MapData>) -> anyhow::Result<()>
                 guard.clear_ready();
             }
         });
+
+        handles.push(handle);
     }
 
-    Ok(())
+    Ok(handles)
+}
+
+fn log_events(mut rx: UnboundedReceiver<PacketEvent>) {
+    tokio::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            info!("USERSPACE STATS: {:?}", event);
+        }
+    });
 }
 
 /// Handles shutdown of the application.
