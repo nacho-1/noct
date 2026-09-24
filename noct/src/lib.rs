@@ -18,6 +18,8 @@ pub struct Opts {
 }
 
 /// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
+// TODO(https://github.com/rust-lang/rust/issues/93092): replace with `MaybeUninit::as_bytes_mut`
+// once stable.
 fn as_bytes_mut<T>(slot: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
     // SAFETY: MaybeUninit<u8> imposes no validity invariants on its memory.
     // Means can contain any pattern of bits.
@@ -123,7 +125,7 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
 /// Returns the handles to the tasks.
 /// The tasks will exit normally if the receiving side of the channel
 /// is closed, but may panic under exceptional circumstances.
-fn read_event_array(
+pub fn read_event_array(
     mut array: PerfEventArray<MapData>,
     sender: UnboundedSender<PacketEvent>,
 ) -> anyhow::Result<Vec<JoinHandle<()>>> {
