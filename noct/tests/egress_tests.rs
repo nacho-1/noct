@@ -10,7 +10,7 @@ const IP_PROTO_TCP: u8 = 6;
 fn build_l2_packet() -> PacketBuilderStep<Ethernet2Header> {
     PacketBuilder::ethernet2(
         [0x02, 0x00, 0x00, 0x00, 0x00, 0x01],
-        [0x02, 0x00, 0x00, 0x00, 0x00, 0x02]
+        [0x02, 0x00, 0x00, 0x00, 0x00, 0x02],
     )
 }
 
@@ -35,10 +35,7 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     let src_port = 12000;
     let dst_port = 34000;
     let builder = build_l2_packet()
-        .ipv4(
-            src_addr.octets(),
-            dst_addr.octets(),
-            10,)
+        .ipv4(src_addr.octets(), dst_addr.octets(), 10)
         .udp(src_port, dst_port);
 
     let tot_len = builder.size(0);
@@ -52,8 +49,7 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let egress_program: &mut CgroupSkb =
-            ebpf.program_mut("egress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
 
         egress_program.test_run(opts)?
     };
@@ -97,10 +93,7 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     let src_port = 12000;
     let dst_port = 34000;
     let builder = build_l2_packet()
-        .ipv4(
-            src_addr.octets(),
-            dst_addr.octets(),
-            10,)
+        .ipv4(src_addr.octets(), dst_addr.octets(), 10)
         .udp(src_port, dst_port);
     let payload = b"foobar";
 
@@ -115,8 +108,7 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let egress_program: &mut CgroupSkb =
-            ebpf.program_mut("egress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
 
         egress_program.test_run(opts)?
     };
@@ -160,10 +152,7 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     let src_port = 12000;
     let dst_port = 34000;
     let builder = build_l2_packet()
-        .ipv4(
-            src_addr.octets(),
-            dst_addr.octets(),
-            10,)
+        .ipv4(src_addr.octets(), dst_addr.octets(), 10)
         .tcp(src_port, dst_port, 12345, 64240);
 
     let tot_len = builder.size(0);
@@ -177,8 +166,7 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let egress_program: &mut CgroupSkb =
-            ebpf.program_mut("egress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
 
         egress_program.test_run(opts)?
     };
@@ -222,10 +210,7 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     let src_port = 12000;
     let dst_port = 34000;
     let builder = build_l2_packet()
-        .ipv4(
-            src_addr.octets(),
-            dst_addr.octets(),
-            10,)
+        .ipv4(src_addr.octets(), dst_addr.octets(), 10)
         .tcp(src_port, dst_port, 12345, 62310);
     let payload = b"foobar";
 
@@ -240,8 +225,7 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let egress_program: &mut CgroupSkb =
-            ebpf.program_mut("egress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
 
         egress_program.test_run(opts)?
     };
@@ -263,4 +247,3 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
 
     Ok(())
 }
-

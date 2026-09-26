@@ -1,12 +1,21 @@
 use std::{fs::File, mem::MaybeUninit};
 
 use anyhow::Context as _;
-use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::PerfEvent}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
+use aya::{
+    Ebpf,
+    maps::{MapData, PerfEventArray, perf::PerfEvent},
+    programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType},
+};
 use aya_log::EbpfLogger;
 use clap::Parser;
 use log::{info, warn};
 use noct_common::PacketEvent;
-use tokio::{io::{Interest, unix::AsyncFd}, signal::{self, unix::SignalKind}, sync::mpsc::{self, UnboundedReceiver, UnboundedSender}, task::JoinHandle};
+use tokio::{
+    io::{Interest, unix::AsyncFd},
+    signal::{self, unix::SignalKind},
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -24,10 +33,7 @@ fn as_bytes_mut<T>(slot: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
     // SAFETY: MaybeUninit<u8> imposes no validity invariants on its memory.
     // Means can contain any pattern of bits.
     unsafe {
-        std::slice::from_raw_parts_mut(
-            slot.as_mut_ptr().cast::<MaybeUninit<u8>>(),
-            size_of::<T>(),
-        )
+        std::slice::from_raw_parts_mut(slot.as_mut_ptr().cast::<MaybeUninit<u8>>(), size_of::<T>())
     }
 }
 
@@ -146,9 +152,7 @@ pub fn read_event_array(
                         for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
                             dst.write(*src);
                         }
-                        let data = unsafe {
-                            data.assume_init()
-                        };
+                        let data = unsafe { data.assume_init() };
                         if let Err(_) = tx.send(data) {
                             return;
                         }
@@ -188,8 +192,8 @@ async fn shutdown_handler() {
     };
 
     // Handle SIGTERM (sent by `docker stop`)
-    let mut terminate = signal::unix::signal(SignalKind::terminate())
-        .expect("SIGTERM handler must be installed");
+    let mut terminate =
+        signal::unix::signal(SignalKind::terminate()).expect("SIGTERM handler must be installed");
 
     tokio::select! {
         _ = ctrl_c => {},
