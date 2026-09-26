@@ -71,7 +71,7 @@ fn process_skb(ctx: SkBuffContext, map: &PerfEventArray<PacketEvent>) -> i32 {
                 protocol: u8::from(protocol),
                 _pad: [0; 3],
             };
-            TX_STATS.output(&ctx, &stats, 0);
+            map.output(&ctx, &stats, 0);
         }
         IpProto::Udp => {
             let udphdr = match ctx.load::<UdpHdr>(usize::from(ip4hdr.ihl())) {

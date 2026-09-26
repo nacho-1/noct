@@ -22,13 +22,13 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     )))?;
 
     {
-        let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
-        ingress_program.load()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
+        egress_program.load()?;
     }
 
-    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    noct::read_event_array(egress_stats_map, tx)?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -52,10 +52,10 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let ingress_program: &mut CgroupSkb =
-            ebpf.program_mut("ingress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb =
+            ebpf.program_mut("egress").unwrap().try_into()?;
 
-        ingress_program.test_run(opts)?
+        egress_program.test_run(opts)?
     };
     assert_eq!(result.return_value, 1);
 
@@ -84,13 +84,13 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     )))?;
 
     {
-        let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
-        ingress_program.load()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
+        egress_program.load()?;
     }
 
-    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    noct::read_event_array(egress_stats_map, tx)?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -115,10 +115,10 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let ingress_program: &mut CgroupSkb =
-            ebpf.program_mut("ingress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb =
+            ebpf.program_mut("egress").unwrap().try_into()?;
 
-        ingress_program.test_run(opts)?
+        egress_program.test_run(opts)?
     };
     assert_eq!(result.return_value, 1);
 
@@ -147,13 +147,13 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     )))?;
 
     {
-        let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
-        ingress_program.load()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
+        egress_program.load()?;
     }
 
-    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    noct::read_event_array(egress_stats_map, tx)?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -177,10 +177,10 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let ingress_program: &mut CgroupSkb =
-            ebpf.program_mut("ingress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb =
+            ebpf.program_mut("egress").unwrap().try_into()?;
 
-        ingress_program.test_run(opts)?
+        egress_program.test_run(opts)?
     };
     assert_eq!(result.return_value, 1);
 
@@ -209,13 +209,13 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     )))?;
 
     {
-        let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
-        ingress_program.load()?;
+        let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
+        egress_program.load()?;
     }
 
-    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    noct::read_event_array(egress_stats_map, tx)?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -240,10 +240,10 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     };
 
     let result = {
-        let ingress_program: &mut CgroupSkb =
-            ebpf.program_mut("ingress").unwrap().try_into()?;
+        let egress_program: &mut CgroupSkb =
+            ebpf.program_mut("egress").unwrap().try_into()?;
 
-        ingress_program.test_run(opts)?
+        egress_program.test_run(opts)?
     };
     assert_eq!(result.return_value, 1);
 
