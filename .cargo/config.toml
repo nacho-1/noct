@@ -1,2 +1,4 @@
 [target."cfg(all())"]
-runner = "sudo -E"
+runner = ["bash", "-c",
+	'if [ "$CARGO_PKG_NAME" = "noct" ]; then exec sudo -E "$@"; else exec "$@"; fi',
+	"--"]
