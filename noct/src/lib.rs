@@ -1,9 +1,11 @@
+use anyhow::Context;
 use aya::{
     Ebpf,
     maps::PerfEventArray,
 };
 use clap::Parser;
 use noct_common::PacketEvent;
+use noct_config::Config;
 use tokio::{
     signal::{self, unix::SignalKind},
     sync::{broadcast, mpsc::{self, UnboundedReceiver}},
@@ -56,6 +58,9 @@ pub fn init_tracing() {
 /// 3. Wait for shutdown signal.
 /// 4. Perform final cleanup.
 pub async fn run(opts: Opts) -> anyhow::Result<()> {
+    let env = noct_config::get_env().context("cannot get environment")?;
+    let config: Config = noct_config::load_config(&env).context("cannot load config")?;
+
     // This will include the eBPF object file as raw bytes at compile-time
     // and load it at runtime.
     let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
@@ -94,6 +99,8 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
     log_events(ingress_stats_rx);
     log_events(egress_stats_rx);
 
+    let server = tokio::spawn(noct_web::run(config.server, shutdown_tx.subscribe()));
+
     // Wait for application shutdown.
     shutdown_handler(shutdown_tx).await;
 
@@ -113,6 +120,7 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
         }
     }
 
+    tracing::info!("shutting down eBPF event readers...");
     for handler in ingress_readers {
         match handler.await {
             Ok(res) => {
@@ -125,7 +133,6 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
             }
         }
     }
-
     for handler in egress_readers {
         match handler.await {
             Ok(res) => {
@@ -134,8 +141,19 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
                 }
             }
             Err(e) => {
-                tracing::error!("egress to join ingress stats reader: {e}");
+                tracing::error!("failed to join egress stats reader: {e}");
             }
+        }
+    }
+
+    match server.await {
+        Ok(handle) => {
+            if let Err(e) = handle {
+                tracing::error!("server error: {e}");
+            }
+        }
+        Err(e) => {
+            tracing::error!("failed to join server: {e}");
         }
     }
 

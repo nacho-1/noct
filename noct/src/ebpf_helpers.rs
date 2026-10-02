@@ -74,11 +74,10 @@ pub fn read_event_array(
                     res = shdn.recv() => {
                         match res {
                             Ok(()) => {
-                                tracing::info!("shutting down eBPF event reader");
                                 return Ok(());
                             }
                             Err(e) => {
-                                return Err(e.into())
+                                return Err(e.into());
                             }
                         }
                     }
