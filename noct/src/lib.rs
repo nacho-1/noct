@@ -1,40 +1,26 @@
-use std::{fs::File, mem::MaybeUninit};
-
-use anyhow::Context as _;
 use aya::{
     Ebpf,
-    maps::{MapData, PerfEventArray, perf::PerfEvent},
-    programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType},
+    maps::PerfEventArray,
 };
-use aya_log::EbpfLogger;
 use clap::Parser;
-use log::{info, warn};
 use noct_common::PacketEvent;
 use tokio::{
-    io::{Interest, unix::AsyncFd},
     signal::{self, unix::SignalKind},
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
+    sync::{broadcast, mpsc::{self, UnboundedReceiver}},
 };
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Helpers for managing eBPF logic.
+mod ebpf_helpers;
+
+pub use ebpf_helpers::read_event_array;
 
 /// Application options passed by arguments.
 #[derive(Debug, Parser)]
 pub struct Opts {
     #[clap(short, long, default_value = "/sys/fs/cgroup")]
     cgroup_path: std::path::PathBuf,
-}
-
-/// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
-// TODO(https://github.com/rust-lang/rust/issues/93092): replace with `MaybeUninit::as_bytes_mut`
-// once stable.
-fn as_bytes_mut<T>(slot: &mut MaybeUninit<T>) -> &mut [MaybeUninit<u8>] {
-    // SAFETY: MaybeUninit<u8> imposes no validity invariants on its memory.
-    // Means can contain any pattern of bits.
-    unsafe {
-        std::slice::from_raw_parts_mut(slot.as_mut_ptr().cast::<MaybeUninit<u8>>(), size_of::<T>())
-    }
 }
 
 /// Initializes tracing.
@@ -66,6 +52,9 @@ pub fn init_tracing() {
 /// This function does all the work to initialize and run the application:
 ///
 /// 1. Load the eBPF programs into kernel.
+/// 2. Spawn the different tasks of the application.
+/// 3. Wait for shutdown signal.
+/// 4. Perform final cleanup.
 pub async fn run(opts: Opts) -> anyhow::Result<()> {
     // This will include the eBPF object file as raw bytes at compile-time
     // and load it at runtime.
@@ -74,116 +63,99 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
         "/noct"
     )))?;
 
-    match EbpfLogger::init(&mut ebpf) {
-        Err(e) => {
-            // This can happen if all log statements are removed from the eBPF program.
-            warn!("failed to initialize eBPF logger: {e}");
-        }
-        Ok(logger) => {
-            let mut logger = AsyncFd::with_interest(logger, Interest::READABLE)?;
-            tokio::task::spawn(async move {
-                loop {
-                    let mut guard = logger.readable_mut().await.unwrap();
-                    guard.get_inner_mut().flush();
-                    guard.clear_ready();
-                }
-            });
-        }
-    }
-
-    let Opts { cgroup_path } = opts;
-    let cgroup = File::open(&cgroup_path).with_context(|| format!("{}", cgroup_path.display()))?;
-    let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
-    ingress_program.load()?;
-    ingress_program.attach(
-        cgroup.try_clone()?,
-        CgroupSkbAttachType::Ingress,
-        CgroupAttachMode::default(),
-    )?;
-    let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
-    egress_program.load()?;
-    egress_program.attach(
-        cgroup,
-        CgroupSkbAttachType::Egress,
-        CgroupAttachMode::default(),
-    )?;
-
+    // Get the maps for communication with kernel.
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+
+    let Opts { cgroup_path } = opts;
+    // Load the eBPF programs into the kernel at this point.
+    ebpf_helpers::init_ebpf(&mut ebpf, cgroup_path)?;
+
+    // Channel used for graceful shutdown of the different tasks of the application.
+    let (shutdown_tx, _) = broadcast::channel(1);
+
+    // Start spawning the different tasks of the application.
+
+    let ebpf_logger = match ebpf_helpers::init_ebpf_logger(&mut ebpf, shutdown_tx.subscribe()) {
+        Ok(handler) => Some(handler),
+        Err(e) => {
+            tracing::warn!("failed to initialize eBPF logger: {e}");
+            None
+        }
+    };
+
+    // Spawn the different eBPF event consumers.
+    // They read the data sent by the eBPF programs an output it as data to be used
+    // in userspace.
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    read_event_array(ingress_stats_map, ingress_stats_tx)?;
-    read_event_array(egress_stats_map, egress_stats_tx)?;
+    let ingress_readers = read_event_array(ingress_stats_map, ingress_stats_tx, shutdown_tx.subscribe())?;
+    let egress_readers = read_event_array(egress_stats_map, egress_stats_tx, shutdown_tx.subscribe())?;
     log_events(ingress_stats_rx);
     log_events(egress_stats_rx);
 
-    println!("Waiting for Ctrl-C...");
-    shutdown_handler().await;
-    println!("Exiting...");
+    // Wait for application shutdown.
+    shutdown_handler(shutdown_tx).await;
 
-    Ok(())
-}
+    // Perform shutdown cleanups.
+    // TODO: Refactor
 
-/// Reads the event array and pushes the events into a channel.
-///
-/// The functions spawns a task for each online CPU to read the array,
-/// since there's one per CPU.
-/// Returns the handles to the tasks.
-/// The tasks will exit normally if the receiving side of the channel
-/// is closed, but may panic under exceptional circumstances.
-pub fn read_event_array(
-    mut array: PerfEventArray<MapData>,
-    sender: UnboundedSender<PacketEvent>,
-) -> anyhow::Result<Vec<JoinHandle<()>>> {
-    let mut handles = Vec::new();
-
-    for cpu_id in aya::util::online_cpus().map_err(|(_, error)| error)? {
-        let buf = array.open(cpu_id, None)?;
-        let mut buf = AsyncFd::with_interest(buf, Interest::READABLE)?;
-        let tx = sender.clone();
-
-        let handle = tokio::spawn(async move {
-            loop {
-                let mut guard = buf.readable_mut().await.unwrap();
-                guard.get_inner_mut().for_each(|event| match event {
-                    PerfEvent::Sample { head, tail } => {
-                        let mut data = MaybeUninit::<PacketEvent>::uninit();
-                        let bytes = as_bytes_mut(&mut data);
-                        for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
-                            dst.write(*src);
-                        }
-                        let data = unsafe { data.assume_init() };
-                        if let Err(_) = tx.send(data) {
-                            return;
-                        }
-                    }
-                    PerfEvent::Lost { count } => {
-                        warn!("DROPPED {count} SAMPLES")
-                    }
-                });
-                guard.clear_ready();
+    if let Some(handler) = ebpf_logger {
+        match handler.await {
+            Ok(res) => {
+                if let Err(e) = res {
+                    tracing::error!("eBPF logger error: {e}");
+                }
             }
-        });
-
-        handles.push(handle);
+            Err(e) => {
+                tracing::error!("failed to join eBPF logger: {e}");
+            }
+        }
     }
 
-    Ok(handles)
+    for handler in ingress_readers {
+        match handler.await {
+            Ok(res) => {
+                if let Err(e) = res {
+                    tracing::error!("ingress stats reader error: {e}");
+                }
+            }
+            Err(e) => {
+                tracing::error!("failed to join ingress stats reader: {e}");
+            }
+        }
+    }
+
+    for handler in egress_readers {
+        match handler.await {
+            Ok(res) => {
+                if let Err(e) = res {
+                    tracing::error!("egress stats reader error: {e}");
+                }
+            }
+            Err(e) => {
+                tracing::error!("egress to join ingress stats reader: {e}");
+            }
+        }
+    }
+
+    tracing::info!("shutdown successful");
+    Ok(())
 }
 
 fn log_events(mut rx: UnboundedReceiver<PacketEvent>) {
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            info!("USERSPACE STATS: {:?}", event);
+            tracing::info!("USERSPACE STATS: {:?}", event);
         }
     });
 }
 
-/// Handles shutdown of the application.
+/// Handles shutdown of the application. Sends a shutdown broadcast.
 ///
 /// Will await for either a Ctrl-C (SIGINT)
 /// or a SIGTERM (usually sent by `docker stop`).
-async fn shutdown_handler() {
+async fn shutdown_handler(shutdown_tx: broadcast::Sender<()>) {
     // Handle Ctrl-C (SIGINT)
     let ctrl_c = async {
         signal::ctrl_c()
@@ -195,10 +167,12 @@ async fn shutdown_handler() {
     let mut terminate =
         signal::unix::signal(SignalKind::terminate()).expect("SIGTERM handler must be installed");
 
+    tracing::info!("awaiting shutdown signal...");
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate.recv() => {},
     }
 
-    tracing::info!("Shutdown signal received");
+    tracing::info!("shutdown signal received");
+    let _ = shutdown_tx.send(());
 }
