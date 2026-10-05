@@ -28,3 +28,6 @@ pub async fn run(
     Ok(())
 }
 
+/// Helpers that simplify writing server tests.
+#[cfg(feature = "web-test")]
+pub mod test_helpers;

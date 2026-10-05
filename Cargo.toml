@@ -6,6 +6,7 @@ members = [
     "ebpf",
     "web",
     "config",
+    "macros",
 ]
 default-members = ["noct", "common"]
 
@@ -31,14 +32,18 @@ clap = { version = "4.5.20", default-features = false, features = ["std"] }
 dotenvy = { version = "0.15", default-features = false }
 etherparse = { version = "0.21" }
 figment = { version = "0.10", default-features = false, features = ["toml", "env"] }
+hyper = { version = "1.11", default-features = false }
 libc = { version = "0.2.159", default-features = false }
 log = { version = "0.4.22", default-features = false }
 network-types = { version = "0.2", default-features = false }
+quote = { version = "1.0", default-features = false }
 serde = { version = "1.0", default-features = false, features = ["std", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
+syn = { version = "3.0", default-features = false }
 thiserror = { version = "2.0", default-features = false }
 tokio = { version = "1.40.0", default-features = false }
 # See web dependencies for `tower-http` features.
+tower = { version = "0.5", default-features = false }
 tower-http = { version = "0.7", default-features = false }
 tracing = { version = "0.1", default-features = false }
 tracing-panic = { version = "0.1", default-features = false }

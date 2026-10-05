@@ -5,6 +5,9 @@ edition.workspace = true
 
 license.workspace = true
 
+[features]
+web-test = ["dep:noct-macros", "dep:hyper", "dep:tower"]
+
 [dependencies]
 noct-config = { path = "../config" }
 
@@ -16,3 +19,9 @@ tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, default-features = true, features = ["full"] }
 tracing = { workspace = true }
 
+noct-macros = { path = "../macros", optional = true }
+hyper = { workspace = true, features = ["full"], optional = true }
+tower = { workspace = true, features = ["full"], optional = true }
+
+[dev-dependencies]
+noct-web = { path = ".", features = ["web-test"] }
