@@ -1,9 +1,9 @@
 [package]
 name = "noct-web"
 version = "0.1.0"
-edition.workspace = true
-
 license.workspace = true
+edition.workspace = true
+publish = false
 
 [features]
 web-test = ["dep:noct-macros", "dep:hyper", "dep:tower"]
@@ -13,8 +13,8 @@ noct-config = { path = "../config" }
 
 anyhow = { workspace = true }
 axum = { workspace = true, default-features = true, features = ["macros"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { workspace = true, features = ["std", "derive"] }
+serde_json = { workspace = true, features = ["std"] }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, default-features = true, features = ["full"] }
 tracing = { workspace = true }
