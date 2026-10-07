@@ -10,11 +10,14 @@ web-test = ["dep:noct-macros", "dep:hyper", "dep:tower"]
 
 [dependencies]
 noct-config = { path = "../config" }
+noct-db = { path = "../db" }
 
 anyhow = { workspace = true }
 axum = { workspace = true, default-features = true, features = ["macros"] }
+prometheus = { workspace = true, default-features = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
+thiserror = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["full"] }
 tower-http = { workspace = true, default-features = true, features = ["full"] }
 tracing = { workspace = true }

@@ -4,11 +4,10 @@ use aya::{
     maps::PerfEventArray,
 };
 use clap::Parser;
-use noct_common::PacketEvent;
 use noct_config::Config;
 use tokio::{
     signal::{self, unix::SignalKind},
-    sync::{broadcast, mpsc::{self, UnboundedReceiver}},
+    sync::{broadcast, mpsc},
 };
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -96,10 +95,14 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
     let ingress_readers = read_event_array(ingress_stats_map, ingress_stats_tx, shutdown_tx.subscribe())?;
     let egress_readers = read_event_array(egress_stats_map, egress_stats_tx, shutdown_tx.subscribe())?;
-    log_events(ingress_stats_rx);
-    log_events(egress_stats_rx);
 
-    let server = tokio::spawn(noct_web::run(config.server, shutdown_tx.subscribe()));
+    let server = tokio::spawn(
+        noct_web::run(
+            config.server,
+            ingress_stats_rx,
+            egress_stats_rx,
+            shutdown_tx.subscribe(),
+        ));
 
     // Wait for application shutdown.
     shutdown_handler(shutdown_tx).await;
@@ -159,14 +162,6 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
 
     tracing::info!("shutdown successful");
     Ok(())
-}
-
-fn log_events(mut rx: UnboundedReceiver<PacketEvent>) {
-    tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            tracing::info!("USERSPACE STATS: {:?}", event);
-        }
-    });
 }
 
 /// Handles shutdown of the application. Sends a shutdown broadcast.

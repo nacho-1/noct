@@ -1,8 +1,10 @@
 use axum::{Router, body::{Body, Bytes}, http::{HeaderName, Request}, response::Response};
 use hyper::{HeaderMap, Method};
+use noct_db::PacketEvent;
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tower::ServiceExt;
 
-use crate::routes;
+use crate::{routes, state};
 
 /// A request that a test sends to the application.
 ///
@@ -120,6 +122,10 @@ impl BodyExt for Body {
 pub struct TestContext {
     /// The application that is being tested.
     pub app: Router,
+    /// Channel for sending ingress stats.
+    pub ingress_stats_tx: UnboundedSender<PacketEvent>,
+    /// Channel for sending egress stats.
+    pub egress_stats_tx: UnboundedSender<PacketEvent>,
 }
 
 /// Sets up a test and returns a [TestContext].
@@ -129,7 +135,12 @@ pub struct TestContext {
 /// This function is not invoked directly but used inside of the [noct_macros::test] attribute
 /// macro. The test context is automatically passed to test cases marked with that macro.
 pub async fn setup() -> TestContext {
-    let app = routes::init_routes();
+    let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
+    let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
+    let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx)
+        .await
+        .expect("must initialize app state");
+    let app = routes::init_routes(app_state);
 
-    TestContext { app }
+    TestContext { app, ingress_stats_tx, egress_stats_tx }
 }

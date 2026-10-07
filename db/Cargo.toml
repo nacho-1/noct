@@ -1,0 +1,11 @@
+[package]
+name = "noct-db"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+noct-common = { path = "../common" }
+
+either = { workspace = true, default-features = true }

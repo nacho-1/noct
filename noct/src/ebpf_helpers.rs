@@ -3,7 +3,6 @@ use std::{fs::File, mem::MaybeUninit, path::PathBuf};
 use anyhow::Context as _;
 use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::{PerfEvent, PerfEventArrayBuffer}}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
 use aya_log::EbpfLogger;
-use noct_common::PacketEvent;
 use tokio::{io::{Interest, unix::{AsyncFd, AsyncFdReadyMutGuard}}, sync::{broadcast, mpsc::UnboundedSender}, task::JoinHandle};
 
 /// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
@@ -47,7 +46,7 @@ pub fn init_ebpf(ebpf: &mut Ebpf, cgroup_path: PathBuf) -> anyhow::Result<()> {
 /// is closed or if a shutdown broadcast is received.
 pub fn read_event_array(
     mut array: PerfEventArray<MapData>,
-    sender: UnboundedSender<PacketEvent>,
+    sender: UnboundedSender<noct_db::PacketEvent>,
     shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
     let mut handles = Vec::new();
@@ -65,7 +64,7 @@ pub fn read_event_array(
                         let guard = guard?;
                         let events = read_event_buffer(guard);
                         for event in events {
-                            if let Err(_) = tx.send(event) {
+                            if let Err(_) = tx.send(noct_db::PacketEvent::from(event)) {
                                 return Ok(());
                             }
                         }
@@ -94,12 +93,12 @@ pub fn read_event_array(
 /// Reads the event array buffer and initializes each event.
 fn read_event_buffer(
     mut guard: AsyncFdReadyMutGuard<'_, PerfEventArrayBuffer<MapData>>
-) -> Vec<PacketEvent> {
+) -> Vec<noct_common::PacketEvent> {
     let mut events = Vec::new();
 
     guard.get_inner_mut().for_each(|event| match event {
         PerfEvent::Sample { head, tail } => {
-            let mut data = MaybeUninit::<PacketEvent>::uninit();
+            let mut data = MaybeUninit::<noct_common::PacketEvent>::uninit();
             let bytes = as_bytes_mut(&mut data);
             for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
                 dst.write(*src);

@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 noct-common = { path = "../common", features = ["user"] }
 noct-config = { path = "../config/" }
+noct-db = { path = "../db" }
 noct-web = { path = "../web" }
 
 anyhow = { workspace = true, default-features = true }

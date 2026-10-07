@@ -7,6 +7,7 @@ members = [
     "web",
     "config",
     "macros",
+    "db",
 ]
 default-members = ["noct", "common"]
 
@@ -29,12 +30,14 @@ cargo_metadata = { version = "0.23.0", default-features = false }
 # See https://github.com/clap-rs/clap/blob/61f5ee5/clap_builder/src/lib.rs#L15.
 clap = { version = "4.5.20", default-features = false, features = ["std"] }
 dotenvy = { version = "0.15", default-features = false }
+either = { version = "1.19", default-features = false }
 etherparse = { version = "0.21", default-features = false }
 figment = { version = "0.10", default-features = false }
 hyper = { version = "1.11", default-features = false }
 libc = { version = "0.2.159", default-features = false }
 log = { version = "0.4.22", default-features = false }
 network-types = { version = "0.2", default-features = false }
+prometheus = { version = "0.14", default-features = false }
 quote = { version = "1.0", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
