@@ -1,6 +1,6 @@
 use axum::{Router, body::{Body, Bytes}, http::{HeaderName, Request}, response::Response};
 use hyper::{HeaderMap, Method};
-use noct_db::PacketEvent;
+use noct_db::{EventMsg, PacketEvent};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tower::ServiceExt;
 
@@ -123,9 +123,9 @@ pub struct TestContext {
     /// The application that is being tested.
     pub app: Router,
     /// Channel for sending ingress stats.
-    pub ingress_stats_tx: UnboundedSender<PacketEvent>,
+    pub ingress_stats_tx: UnboundedSender<EventMsg<PacketEvent>>,
     /// Channel for sending egress stats.
-    pub egress_stats_tx: UnboundedSender<PacketEvent>,
+    pub egress_stats_tx: UnboundedSender<EventMsg<PacketEvent>>,
 }
 
 /// Sets up a test and returns a [TestContext].

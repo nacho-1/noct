@@ -3,6 +3,7 @@ use std::{fs::File, mem::MaybeUninit, path::PathBuf};
 use anyhow::Context as _;
 use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::{PerfEvent, PerfEventArrayBuffer}}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
 use aya_log::EbpfLogger;
+use noct_db::EventMsg;
 use tokio::{io::{Interest, unix::{AsyncFd, AsyncFdReadyMutGuard}}, sync::{broadcast, mpsc::UnboundedSender}, task::JoinHandle};
 
 /// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
@@ -46,7 +47,7 @@ pub fn init_ebpf(ebpf: &mut Ebpf, cgroup_path: PathBuf) -> anyhow::Result<()> {
 /// is closed or if a shutdown broadcast is received.
 pub fn read_event_array(
     mut array: PerfEventArray<MapData>,
-    sender: UnboundedSender<noct_db::PacketEvent>,
+    sender: UnboundedSender<EventMsg<noct_db::PacketEvent>>,
     shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
     let mut handles = Vec::new();
@@ -64,7 +65,8 @@ pub fn read_event_array(
                         let guard = guard?;
                         let events = read_event_buffer(guard);
                         for event in events {
-                            if let Err(_) = tx.send(noct_db::PacketEvent::from(event)) {
+                            let event = noct_db::PacketEvent::from(event);
+                            if let Err(_) = tx.send(EventMsg::new(event)) {
                                 return Ok(());
                             }
                         }

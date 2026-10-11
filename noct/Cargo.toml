@@ -5,6 +5,9 @@ license.workspace = true
 edition.workspace = true
 publish = false
 
+[features]
+test-helpers = ["dep:either", "dep:etherparse"]
+
 [dependencies]
 noct-common = { path = "../common", features = ["user"] }
 noct-config = { path = "../config/" }
@@ -14,6 +17,8 @@ noct-web = { path = "../web" }
 anyhow = { workspace = true, default-features = true }
 aya = { workspace = true }
 aya-log = { workspace = true }
+either = { workspace = true, default-features = true, optional = true }
+etherparse = { workspace = true, default-features = true, optional = true }
 libc = { workspace = true }
 log = { workspace = true }
 #thiserror = { workspace = true }
@@ -31,7 +36,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "registry", "
 clap = { workspace = true, features = ["derive", "std"] }
 
 [dev-dependencies]
-etherparse = { workspace = true, default-features = true }
+noct = { path = ".", features = ["test-helpers"] }
+noct-db = { path = "../db", features = ["test-helpers"] }
 
 [build-dependencies]
 anyhow = { workspace = true }

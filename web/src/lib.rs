@@ -1,5 +1,5 @@
 use noct_config::ServerConfig;
-use noct_db::PacketEvent;
+use noct_db::{EventMsg, PacketEvent};
 use tokio::{net::TcpListener, sync::{broadcast, mpsc::UnboundedReceiver}};
 
 /// The application's controllers that implement request handlers.
@@ -20,8 +20,8 @@ pub mod state;
 /// 3. Start listening for requests on the configured interface and port.
 pub async fn run(
     config: ServerConfig,
-    ingress_stats_rx: UnboundedReceiver<PacketEvent>,
-    egress_stats_rx: UnboundedReceiver<PacketEvent>,
+    ingress_stats_rx: UnboundedReceiver<EventMsg<PacketEvent>>,
+    egress_stats_rx: UnboundedReceiver<EventMsg<PacketEvent>>,
     mut shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
     let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx).await?;
@@ -44,5 +44,5 @@ pub async fn run(
 }
 
 /// Helpers that simplify writing server tests.
-#[cfg(feature = "web-test")]
+#[cfg(feature = "test-helpers")]
 pub mod test_helpers;

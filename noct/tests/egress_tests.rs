@@ -1,11 +1,10 @@
 use std::net::Ipv4Addr;
 
 use aya::{Ebpf, TestRun, TestRunOptions, maps::PerfEventArray, programs::CgroupSkb};
+use either::Either;
 use etherparse::{Ethernet2Header, PacketBuilder, PacketBuilderStep};
+use noct_db::IpProto;
 use tokio::sync::{broadcast, mpsc};
-
-const IP_PROTO_UDP: u8 = 17;
-const IP_PROTO_TCP: u8 = 6;
 
 fn build_l2_packet() -> PacketBuilderStep<Ethernet2Header> {
     PacketBuilder::ethernet2(
@@ -80,20 +79,21 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
     shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_UDP);
-    assert_eq!(stats.payload_len, 0);
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::UDP);
+    assert_eq!(event.payload_len, 0);
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
 
     for handle in handles {
         assert!(handle.await.is_ok());
@@ -145,20 +145,21 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
     shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_UDP);
-    assert_eq!(usize::from(stats.payload_len), payload.len());
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::UDP);
+    assert_eq!(usize::from(event.payload_len), payload.len());
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
 
     for handle in handles {
         assert!(handle.await.is_ok());
@@ -209,20 +210,21 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
     shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_TCP);
-    assert_eq!(stats.payload_len, 0);
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::TCP);
+    assert_eq!(event.payload_len, 0);
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
 
     for handle in handles {
         assert!(handle.await.is_ok());
@@ -274,20 +276,21 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
     shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_TCP);
-    assert_eq!(usize::from(stats.payload_len), payload.len());
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::TCP);
+    assert_eq!(usize::from(event.payload_len), payload.len());
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
 
     for handle in handles {
         assert!(handle.await.is_ok());
