@@ -2,3 +2,6 @@
 runner = ["bash", "-c",
 	'if [ "$CARGO_PKG_NAME" = "noct" ]; then exec sudo -E "$@"; else exec "$@"; fi',
 	"--"]
+
+[alias]
+test-userspace = "test -p noct-web -p noct-db -p noct-config"

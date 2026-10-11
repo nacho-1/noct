@@ -9,6 +9,10 @@ const IPPROTO_UDP: u8 = 17;
 /// Packet event structure for userspace use.
 ///
 /// Distintion from [noct_common::PacketEvent] to not get tied to that one's restrictions.
+#[cfg_attr(
+    feature = "test-helpers",
+    derive(Clone)
+)]
 pub struct PacketEvent {
     /// Source IP address.
     pub src_addr: Either<Ipv4Addr, Ipv6Addr>,
@@ -43,7 +47,7 @@ impl From<noct_common::PacketEvent> for PacketEvent {
 /// Layer 4 protocol.
 #[cfg_attr(
     feature = "test-helpers",
-    derive(Debug, PartialEq)
+    derive(Clone, Debug, PartialEq)
 )]
 pub enum IpProto {
     TCP,
@@ -68,5 +72,52 @@ impl fmt::Display for IpProto {
             IpProto::UDP => write!(f, "UDP"),
             IpProto::Other => write!(f, "Other"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_tcp() {
+        let proto = IpProto::TCP;
+
+        assert_eq!(&proto.to_string(), "TCP");
+    }
+
+    #[test]
+    fn test_display_udp() {
+        let proto = IpProto::UDP;
+
+        assert_eq!(&proto.to_string(), "UDP");
+    }
+
+    #[test]
+    fn test_display_other() {
+        let proto = IpProto::Other;
+
+        assert_eq!(&proto.to_string(), "Other");
+    }
+
+    #[test]
+    fn test_proto_from_tcp() {
+        let proto = IpProto::from(IPPROTO_TCP);
+
+        assert_eq!(proto, IpProto::TCP);
+    }
+
+    #[test]
+    fn test_proto_from_udp() {
+        let proto = IpProto::from(IPPROTO_UDP);
+
+        assert_eq!(proto, IpProto::UDP);
+    }
+
+    #[test]
+    fn test_proto_from_other() {
+        let proto = IpProto::from(20);
+
+        assert_eq!(proto, IpProto::Other);
     }
 }
