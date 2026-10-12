@@ -29,12 +29,10 @@ pub async fn init_app_state(
 ) -> anyhow::Result<AppState> {
     let registry = Registry::new();
 
-    let in_traffic = init_traffic_counter(
-        "incoming_traffic_bytes",
-        "Total amount of incoming traffic")?;
-    let out_traffic = init_traffic_counter(
-        "outgoing_traffic_bytes",
-        "Total amount of outgoing traffic")?;
+    let in_traffic =
+        init_traffic_counter("incoming_traffic_bytes", "Total amount of incoming traffic")?;
+    let out_traffic =
+        init_traffic_counter("outgoing_traffic_bytes", "Total amount of outgoing traffic")?;
 
     registry.register(Box::new(in_traffic.clone()))?;
     registry.register(Box::new(out_traffic.clone()))?;
@@ -42,12 +40,7 @@ pub async fn init_app_state(
     tokio::spawn(read_traffic_events(ingress_stats_rx, in_traffic));
     tokio::spawn(read_traffic_events(egress_stats_rx, out_traffic));
 
-    Ok(
-        AppState {
-            registry,
-        }
-    )
-
+    Ok(AppState { registry })
 }
 
 /// Updates the metric counters.
@@ -76,17 +69,14 @@ async fn read_traffic_events(
 /// otherwise it'll have no protocol values until they are increased,
 /// and therefore the no metric.
 fn init_traffic_counter(name: &str, help: &str) -> anyhow::Result<IntCounterVec> {
-    let counter = IntCounterVec::new(
-        Opts::new(name,help),
-        &["protocol"],
-    )
-        .map_err(anyhow::Error::from)?;
+    let counter =
+        IntCounterVec::new(Opts::new(name, help), &["protocol"]).map_err(anyhow::Error::from)?;
 
     // TODO: implement better way to iterate through enum.
     for proto in [
         IpProto::TCP.to_string(),
         IpProto::UDP.to_string(),
-        IpProto::Other.to_string()
+        IpProto::Other.to_string(),
     ] {
         counter.with_label_values(&[proto]);
     }

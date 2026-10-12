@@ -1,4 +1,9 @@
-use axum::{Router, body::{Body, Bytes}, http::{HeaderName, Request}, response::Response};
+use axum::{
+    Router,
+    body::{Body, Bytes},
+    http::{HeaderName, Request},
+    response::Response,
+};
 use hyper::{HeaderMap, Method};
 use noct_db::{EventMsg, PacketEvent};
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -108,7 +113,7 @@ impl BodyExt for Body {
     #[allow(unused)]
     async fn into_json<T>(self) -> T
     where
-        T: serde::de::DeserializeOwned
+        T: serde::de::DeserializeOwned,
     {
         let body = self.into_bytes().await;
         serde_json::from_slice::<T>(&body).expect("failed to deserialize JSON body")
@@ -142,5 +147,9 @@ pub async fn setup() -> TestContext {
         .expect("must initialize app state");
     let app = routes::init_routes(app_state);
 
-    TestContext { app, ingress_stats_tx, egress_stats_tx }
+    TestContext {
+        app,
+        ingress_stats_tx,
+        egress_stats_tx,
+    }
 }

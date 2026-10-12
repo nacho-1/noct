@@ -1,6 +1,9 @@
 use noct_config::ServerConfig;
 use noct_db::{EventMsg, PacketEvent};
-use tokio::{net::TcpListener, sync::{broadcast, mpsc::UnboundedReceiver}};
+use tokio::{
+    net::TcpListener,
+    sync::{broadcast, mpsc::UnboundedReceiver},
+};
 
 /// The application's controllers that implement request handlers.
 pub mod controllers;

@@ -6,16 +6,15 @@ use noct_db::{EventMsg, IpProto, PacketEvent};
 use noct_web::test_helpers::{BodyExt, RouterExt, TestContext};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
-const TEMPLATE_PACKET_EVENT: PacketEvent =
-    PacketEvent {
-        src_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 1)),
-        dst_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 2)),
-        src_port: 12345,
-        dst_port: 54321,
-        pkt_len: 30,
-        payload_len: 2,
-        protocol: IpProto::UDP,
-    };
+const TEMPLATE_PACKET_EVENT: PacketEvent = PacketEvent {
+    src_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 1)),
+    dst_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 2)),
+    src_port: 12345,
+    dst_port: 54321,
+    pkt_len: 30,
+    payload_len: 2,
+    protocol: IpProto::UDP,
+};
 
 async fn send_event(event: PacketEvent, tx: &UnboundedSender<EventMsg<PacketEvent>>) {
     let (ack_rx, ack_tx) = oneshot::channel();
@@ -26,11 +25,7 @@ async fn send_event(event: PacketEvent, tx: &UnboundedSender<EventMsg<PacketEven
 
 #[noct_macros::test]
 async fn test_empty_metrics(context: &TestContext) {
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -55,11 +50,7 @@ async fn test_incoming_tcp(context: &TestContext) {
     };
     send_event(event, &context.ingress_stats_tx).await;
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -84,11 +75,7 @@ async fn test_outgoing_tcp(context: &TestContext) {
     };
     send_event(event, &context.egress_stats_tx).await;
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -129,11 +116,7 @@ async fn test_tcp_handshake(context: &TestContext) {
         send_event(ack, &context.ingress_stats_tx),
     );
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -153,11 +136,7 @@ async fn test_metrics_udp(context: &TestContext) {
     send_event(TEMPLATE_PACKET_EVENT, &context.ingress_stats_tx).await;
     send_event(TEMPLATE_PACKET_EVENT, &context.egress_stats_tx).await;
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -181,11 +160,7 @@ async fn test_metrics_other_protocol(context: &TestContext) {
     send_event(event.clone(), &context.ingress_stats_tx).await;
     send_event(event.clone(), &context.egress_stats_tx).await;
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -221,11 +196,7 @@ async fn test_multiple_protocols(context: &TestContext) {
         send_event(other_proto_event, &context.egress_stats_tx),
     );
 
-    let response = context
-        .app
-        .request("/metrics")
-        .send()
-        .await;
+    let response = context.app.request("/metrics").send().await;
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -239,4 +210,3 @@ async fn test_multiple_protocols(context: &TestContext) {
     assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"UDP\"} 30"));
     assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"Other\"} 30"));
 }
-

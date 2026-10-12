@@ -9,10 +9,7 @@ const IPPROTO_UDP: u8 = 17;
 /// Packet event structure for userspace use.
 ///
 /// Distintion from [noct_common::PacketEvent] to not get tied to that one's restrictions.
-#[cfg_attr(
-    feature = "test-helpers",
-    derive(Clone)
-)]
+#[cfg_attr(feature = "test-helpers", derive(Clone))]
 pub struct PacketEvent {
     /// Source IP address.
     pub src_addr: Either<Ipv4Addr, Ipv6Addr>,
@@ -45,10 +42,7 @@ impl From<noct_common::PacketEvent> for PacketEvent {
 }
 
 /// Layer 4 protocol.
-#[cfg_attr(
-    feature = "test-helpers",
-    derive(Clone, Debug, PartialEq)
-)]
+#[cfg_attr(feature = "test-helpers", derive(Clone, Debug, PartialEq))]
 pub enum IpProto {
     TCP,
     UDP,

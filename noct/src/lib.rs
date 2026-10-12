@@ -1,8 +1,5 @@
 use anyhow::Context;
-use aya::{
-    Ebpf,
-    maps::PerfEventArray,
-};
+use aya::{Ebpf, maps::PerfEventArray};
 use clap::Parser;
 use noct_config::Config;
 use tokio::{
@@ -93,16 +90,17 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
     // in userspace.
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    let ingress_readers = read_event_array(ingress_stats_map, ingress_stats_tx, shutdown_tx.subscribe())?;
-    let egress_readers = read_event_array(egress_stats_map, egress_stats_tx, shutdown_tx.subscribe())?;
+    let ingress_readers =
+        read_event_array(ingress_stats_map, ingress_stats_tx, shutdown_tx.subscribe())?;
+    let egress_readers =
+        read_event_array(egress_stats_map, egress_stats_tx, shutdown_tx.subscribe())?;
 
-    let server = tokio::spawn(
-        noct_web::run(
-            config.server,
-            ingress_stats_rx,
-            egress_stats_rx,
-            shutdown_tx.subscribe(),
-        ));
+    let server = tokio::spawn(noct_web::run(
+        config.server,
+        ingress_stats_rx,
+        egress_stats_rx,
+        shutdown_tx.subscribe(),
+    ));
 
     // Wait for application shutdown.
     shutdown_handler(shutdown_tx).await;

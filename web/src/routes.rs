@@ -3,7 +3,10 @@ use std::sync::Arc;
 use axum::{Router, routing};
 use tower_http::trace::TraceLayer;
 
-use crate::{controllers::{health, metrics}, state::AppState};
+use crate::{
+    controllers::{health, metrics},
+    state::AppState,
+};
 
 /// Initializes the application's routes.
 ///

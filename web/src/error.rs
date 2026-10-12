@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use axum::{http::StatusCode, response::{IntoResponse, Response}};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 
 /// Error type that encapsulates anything that can go wrong
 /// in the web server. Implements [IntoResponse],

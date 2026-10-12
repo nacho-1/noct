@@ -1,13 +1,16 @@
-use anyhow::{anyhow, Context};
+use std::{
+    env,
+    fmt::{Display, Formatter},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+};
+
+use anyhow::{Context, anyhow};
 use dotenvy::dotenv;
 use figment::{
-    providers::{Env, Format, Serialized, Toml},
     Figment,
+    providers::{Env, Format, Serialized, Toml},
 };
 use serde::{Deserialize, Serialize};
-use std::env;
-use std::fmt::{Display, Formatter};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing::info;
 
 /// The application configuration.
@@ -181,8 +184,9 @@ pub fn parse_env(env: &str) -> Result<Environment, anyhow::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::net::{IpAddr, Ipv4Addr};
+
+    use super::*;
 
     #[derive(Deserialize, PartialEq, Debug)]
     pub struct Config {
@@ -308,4 +312,3 @@ mod tests {
         });
     }
 }
-

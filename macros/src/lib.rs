@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
+use syn::{ItemFn, parse_macro_input};
 
 /// Used to mark an application test.
 ///
@@ -37,4 +37,3 @@ pub fn test(_: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(output)
 }
-

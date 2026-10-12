@@ -1,10 +1,24 @@
 use std::{fs::File, mem::MaybeUninit, path::PathBuf};
 
 use anyhow::Context as _;
-use aya::{Ebpf, maps::{MapData, PerfEventArray, perf::{PerfEvent, PerfEventArrayBuffer}}, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType}};
+use aya::{
+    Ebpf,
+    maps::{
+        MapData, PerfEventArray,
+        perf::{PerfEvent, PerfEventArrayBuffer},
+    },
+    programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType},
+};
 use aya_log::EbpfLogger;
 use noct_db::EventMsg;
-use tokio::{io::{Interest, unix::{AsyncFd, AsyncFdReadyMutGuard}}, sync::{broadcast, mpsc::UnboundedSender}, task::JoinHandle};
+use tokio::{
+    io::{
+        Interest,
+        unix::{AsyncFd, AsyncFdReadyMutGuard},
+    },
+    sync::{broadcast, mpsc::UnboundedSender},
+    task::JoinHandle,
+};
 
 /// Converts an uninitialized instance of [T] into a slice of uninitialized bytes.
 // TODO(https://github.com/rust-lang/rust/issues/93092): replace with `MaybeUninit::as_bytes_mut`
@@ -94,7 +108,7 @@ pub fn read_event_array(
 
 /// Reads the event array buffer and initializes each event.
 fn read_event_buffer(
-    mut guard: AsyncFdReadyMutGuard<'_, PerfEventArrayBuffer<MapData>>
+    mut guard: AsyncFdReadyMutGuard<'_, PerfEventArrayBuffer<MapData>>,
 ) -> Vec<noct_common::PacketEvent> {
     let mut events = Vec::new();
 
