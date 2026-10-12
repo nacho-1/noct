@@ -1,0 +1,17 @@
+[package]
+name = "noct-config"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow = { workspace = true, default-features = true }
+clap = { workspace = true, features = ["derive", "std"] }
+dotenvy = { workspace = true }
+figment = { workspace = true, features = ["toml", "env"] }
+serde = { workspace = true, features = ["std", "derive"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+figment = { workspace = true, features = ["test"] }

@@ -1,15 +1,10 @@
 use std::process::ExitCode;
 
-use clap::Parser;
-use noct::Opts;
-
 #[tokio::main]
 async fn main() -> ExitCode {
-    let opts = Opts::parse();
-
     noct::init_tracing();
 
-    match noct::run(opts).await {
+    match noct::run().await {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             tracing::error!(

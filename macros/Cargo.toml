@@ -1,0 +1,13 @@
+[package]
+name = "noct-macros"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = { workspace = true, default-features = true }
+syn = { workspace = true, default-features = true, features = ["full"] }

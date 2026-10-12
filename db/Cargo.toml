@@ -1,0 +1,19 @@
+[package]
+name = "noct-db"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+publish = false
+
+[features]
+test-helpers = ["dep:tokio"]
+
+[dependencies]
+noct-common = { path = "../common" }
+
+either = { workspace = true, default-features = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
+
+[dev-dependencies]
+noct-db = { path = ".", features = ["test-helpers"] }
+

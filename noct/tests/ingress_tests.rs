@@ -1,17 +1,40 @@
 use std::net::Ipv4Addr;
 
 use aya::{Ebpf, TestRun, TestRunOptions, maps::PerfEventArray, programs::CgroupSkb};
+use either::Either;
 use etherparse::{Ethernet2Header, PacketBuilder, PacketBuilderStep};
-use tokio::sync::mpsc;
-
-const IP_PROTO_UDP: u8 = 17;
-const IP_PROTO_TCP: u8 = 6;
+use noct_db::IpProto;
+use tokio::sync::{broadcast, mpsc};
 
 fn build_l2_packet() -> PacketBuilderStep<Ethernet2Header> {
     PacketBuilder::ethernet2(
         [0x02, 0x00, 0x00, 0x00, 0x00, 0x01],
         [0x02, 0x00, 0x00, 0x00, 0x00, 0x02],
     )
+}
+
+#[tokio::test]
+async fn test_graceful_shutdown() -> anyhow::Result<()> {
+    let mut ebpf = Ebpf::load(aya::include_bytes_aligned!(concat!(
+        env!("OUT_DIR"),
+        "/noct"
+    )))?;
+
+    let ingress_program: &mut CgroupSkb = ebpf.program_mut("ingress").unwrap().try_into()?;
+    ingress_program.load()?;
+
+    let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let (shutdown_tx, _) = broadcast::channel(1);
+    let (tx, _) = mpsc::unbounded_channel();
+    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+
+    shutdown_tx.send(())?;
+
+    for handle in handles {
+        assert!(handle.await.is_ok());
+    }
+
+    Ok(())
 }
 
 #[tokio::test]
@@ -27,8 +50,9 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     }
 
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -55,20 +79,25 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
+    shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_UDP);
-    assert_eq!(stats.payload_len, 0);
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::UDP);
+    assert_eq!(event.payload_len, 0);
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
 
+    for handle in handles {
+        assert!(handle.await.is_ok());
+    }
     Ok(())
 }
 
@@ -85,8 +114,9 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     }
 
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -114,19 +144,25 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
+    shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_UDP);
-    assert_eq!(usize::from(stats.payload_len), payload.len());
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::UDP);
+    assert_eq!(usize::from(event.payload_len), payload.len());
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
+
+    for handle in handles {
+        assert!(handle.await.is_ok());
+    }
 
     Ok(())
 }
@@ -144,8 +180,9 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     }
 
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -172,19 +209,25 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
+    shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_TCP);
-    assert_eq!(stats.payload_len, 0);
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::TCP);
+    assert_eq!(event.payload_len, 0);
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
+
+    for handle in handles {
+        assert!(handle.await.is_ok());
+    }
 
     Ok(())
 }
@@ -202,8 +245,9 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     }
 
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
+    let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    noct::read_event_array(ingress_stats_map, tx)?;
+    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -231,19 +275,25 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     };
     assert_eq!(result.return_value, 1);
 
-    let stats = rx
+    let msg = rx
         .recv()
         .await
         .ok_or_else(|| anyhow::anyhow!("no event received"))?;
     rx.close();
+    shutdown_tx.send(())?;
 
-    assert_eq!(stats.src_addr, src_addr);
-    assert_eq!(stats.dst_addr, dst_addr);
-    assert_eq!(stats.src_port, src_port);
-    assert_eq!(stats.dst_port, dst_port);
-    assert_eq!(stats.protocol, IP_PROTO_TCP);
-    assert_eq!(usize::from(stats.payload_len), payload.len());
-    assert_eq!(usize::from(stats.pkt_len), tot_len - Ethernet2Header::LEN);
+    let event = msg.event;
+    assert_eq!(event.src_addr, Either::Left(src_addr));
+    assert_eq!(event.dst_addr, Either::Left(dst_addr));
+    assert_eq!(event.src_port, src_port);
+    assert_eq!(event.dst_port, dst_port);
+    assert_eq!(event.protocol, IpProto::TCP);
+    assert_eq!(usize::from(event.payload_len), payload.len());
+    assert_eq!(usize::from(event.pkt_len), tot_len - Ethernet2Header::LEN);
+
+    for handle in handles {
+        assert!(handle.await.is_ok());
+    }
 
     Ok(())
 }

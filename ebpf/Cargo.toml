@@ -2,6 +2,7 @@
 name = "noct-ebpf"
 version = "0.1.0"
 edition.workspace = true
+publish = false
 
 [dependencies]
 noct-common = { path = "../common" }

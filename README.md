@@ -10,13 +10,18 @@
 
 ## Build & Run
 
-Use `cargo build`, `cargo check`, etc. as normal. Run your program with:
+Use `cargo build`, `cargo check`, etc. as normal. Run the program with:
 
 ```shell
 cargo run --release
 ```
 
 Cargo build scripts are used to automatically build the eBPF correctly and include it in the program.
+
+## Testing
+
+`cargo test` will run eBPF related tests, which require _sudo_ privileges.
+To run other userspace tests, that don't require privileges, run `cargo test-userspace`.
 
 ## Cross-compiling on macOS
 
@@ -29,6 +34,21 @@ cargo build --package noct --release \
 ```
 The cross-compiled program `target/${ARCH}-unknown-linux-musl/release/noct` can be
 copied to a Linux server or VM and run there.
+
+## Project Structure
+
+Distinct parts of the project are separated into separate crates:
+
+```
+.
+├── noct   // Entry-point of the app as well as eBPF related logic
+├── ebpf   // The eBPF programs to be loaded in the kernel
+├── common // Structures in common between userspace and the eBPF programs
+├── config // Defines the `Config` struct and handles building the configuration from environment-specific TOML files and environment variables
+├── db     // Encapsulates entity definitions and related code
+├── macros // Contains macros for application tests
+└── web    // The web interface as well as tests for it
+```
 
 ## License
 
