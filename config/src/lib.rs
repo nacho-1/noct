@@ -1,10 +1,13 @@
 use std::{
+    collections::HashMap,
     env,
     fmt::{Display, Formatter},
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
 };
 
 use anyhow::{Context, anyhow};
+use clap::Parser;
 use dotenvy::dotenv;
 use figment::{
     Figment,
@@ -16,7 +19,7 @@ use tracing::info;
 /// The application configuration.
 ///
 /// This struct is the central point for the entire application configuration.
-/// It holds the [`ServerConfig`] and can be extended with any application-specific configuration settings
+/// It holds the [ServerConfig] and can be extended with any application-specific configuration settings
 /// that will be read from the main `app.toml` and the environment-specific configuration files.
 ///
 /// For any setting that appears in both the `app.toml` and the environment-specific file,
@@ -24,15 +27,17 @@ use tracing::info;
 /// that are overridden per environment if necessary.
 #[derive(Deserialize, Clone, Debug)]
 pub struct Config {
-    /// the server configuration: [`ServerConfig`]
+    /// the server configuration: [ServerConfig]
     pub server: ServerConfig,
+    /// The cgroup's path.
+    pub cgroup_path: PathBuf,
 }
 
 /// The server configuration.
 ///
 /// This struct keeps all settings specific to the server – currently that is the interface the server binds to
 /// but more might be added in the future.
-/// It **must** be used for the `server` field in the application-specific [`Config`] struct:
+/// It **must** be used for the `server` field in the application-specific [Config] struct:
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct ServerConfig {
@@ -59,14 +64,21 @@ impl ServerConfig {
     }
 }
 
+/// Application options passed by arguments.
+#[derive(Debug, Parser, Serialize)]
+pub struct Opts {
+    #[clap(short, long)]
+    cgroup_path: Option<PathBuf>,
+}
+
 /// Loads the application configuration for a particular environment.
 ///
 /// Depending on the environment, this function will behave differently:
-/// * for [`Environment::Development`],
+/// * for [Environment::Development],
 /// the function will load env vars from a `.env` file at the project root if that is present
-/// * for [`Environment::Test`],
+/// * for [Environment::Test],
 /// the function will load env vars from a `.env.test` file at the project root if that is present
-/// * for [`Environment::Production`],
+/// * for [Environment::Production],
 /// the function will only use the process env vars, and not load a `.env` file
 ///
 /// In case the .env or .env.test files live in another directory,
@@ -77,6 +89,7 @@ impl ServerConfig {
 /// * the `config/app.toml` file
 /// * the `config/environments/<development|production|test>.toml` files depending on the environment
 /// * environment variables
+/// * program arguments, if allowed through this source
 pub fn load_config<'a, T>(env: &Environment) -> Result<T, anyhow::Error>
 where
     T: Deserialize<'a>,
@@ -109,6 +122,8 @@ where
         Environment::Test => "test.toml",
     };
 
+    let opts = Opts::parse();
+
     let config: T = Figment::new()
         .merge(Serialized::defaults(ServerConfig::default()).key("server"))
         .merge(Toml::file("config/app.toml"))
@@ -117,6 +132,15 @@ where
             env_config_file
         )))
         .merge(Env::prefixed("APP_").split("__"))
+        .merge(Serialized::defaults(
+            opts.cgroup_path
+                .map(|path| {
+                    [("cgroup_path", path)]
+                        .into_iter()
+                        .collect::<HashMap<_, _>>()
+                })
+                .unwrap_or_default(),
+        ))
         .extract()
         .context("Could not read configuration!")?;
 

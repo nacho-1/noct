@@ -1037,7 +1037,6 @@ dependencies = [
  "aya-build",
  "aya-log",
  "cargo_metadata",
- "clap",
  "either",
  "etherparse",
  "libc",
@@ -1066,6 +1065,7 @@ name = "noct-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "dotenvy",
  "figment",
  "serde",

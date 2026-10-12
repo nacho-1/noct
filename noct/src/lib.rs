@@ -1,6 +1,5 @@
 use anyhow::Context;
 use aya::{Ebpf, maps::PerfEventArray};
-use clap::Parser;
 use noct_config::Config;
 use tokio::{
     signal::{self, unix::SignalKind},
@@ -13,13 +12,6 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 mod ebpf_helpers;
 
 pub use ebpf_helpers::read_event_array;
-
-/// Application options passed by arguments.
-#[derive(Debug, Parser)]
-pub struct Opts {
-    #[clap(short, long, default_value = "/sys/fs/cgroup")]
-    cgroup_path: std::path::PathBuf,
-}
 
 /// Initializes tracing.
 ///
@@ -53,7 +45,7 @@ pub fn init_tracing() {
 /// 2. Spawn the different tasks of the application.
 /// 3. Wait for shutdown signal.
 /// 4. Perform final cleanup.
-pub async fn run(opts: Opts) -> anyhow::Result<()> {
+pub async fn run() -> anyhow::Result<()> {
     let env = noct_config::get_env().context("cannot get environment")?;
     let config: Config = noct_config::load_config(&env).context("cannot load config")?;
 
@@ -68,9 +60,8 @@ pub async fn run(opts: Opts) -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
 
-    let Opts { cgroup_path } = opts;
     // Load the eBPF programs into the kernel at this point.
-    ebpf_helpers::init_ebpf(&mut ebpf, cgroup_path)?;
+    ebpf_helpers::init_ebpf(&mut ebpf, config.cgroup_path)?;
 
     // Channel used for graceful shutdown of the different tasks of the application.
     let (shutdown_tx, _) = broadcast::channel(1);

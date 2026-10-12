@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 anyhow = { workspace = true, default-features = true }
+clap = { workspace = true, features = ["derive", "std"] }
 dotenvy = { workspace = true }
 figment = { workspace = true, features = ["toml", "env"] }
 serde = { workspace = true, features = ["std", "derive"] }

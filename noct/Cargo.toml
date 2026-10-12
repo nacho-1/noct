@@ -21,7 +21,6 @@ either = { workspace = true, default-features = true, optional = true }
 etherparse = { workspace = true, default-features = true, optional = true }
 libc = { workspace = true }
 log = { workspace = true }
-#thiserror = { workspace = true }
 tokio = { workspace = true, features = [
     "macros",
     "rt",
@@ -33,7 +32,6 @@ tokio = { workspace = true, features = [
 tracing = { workspace = true }
 tracing-panic = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "registry", "fmt"] }
-clap = { workspace = true, features = ["derive", "std"] }
 
 [dev-dependencies]
 noct = { path = ".", features = ["test-helpers"] }
