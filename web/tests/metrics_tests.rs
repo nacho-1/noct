@@ -200,3 +200,43 @@ async fn test_metrics_other_protocol(context: &TestContext) {
     assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"Other\"} 30"));
 }
 
+#[noct_macros::test]
+async fn test_multiple_protocols(context: &TestContext) {
+    let tcp_event = PacketEvent {
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let other_proto_event = PacketEvent {
+        protocol: IpProto::Other,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    tokio::join!(
+        send_event(TEMPLATE_PACKET_EVENT, &context.ingress_stats_tx),
+        send_event(TEMPLATE_PACKET_EVENT, &context.egress_stats_tx),
+        send_event(tcp_event.clone(), &context.ingress_stats_tx),
+        send_event(tcp_event, &context.egress_stats_tx),
+        send_event(other_proto_event.clone(), &context.ingress_stats_tx),
+        send_event(other_proto_event, &context.egress_stats_tx),
+    );
+
+    let response = context
+        .app
+        .request("/metrics")
+        .send()
+        .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"Other\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"Other\"} 30"));
+}
+
