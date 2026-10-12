@@ -4,7 +4,7 @@ use axum::{Router, routing};
 use tower_http::trace::TraceLayer;
 
 use crate::{
-    controllers::{health, metrics},
+    controllers::{self, health, metrics},
     state::AppState,
 };
 
@@ -16,6 +16,7 @@ pub fn init_routes(app_state: AppState) -> Router {
     let shared_state = Arc::new(app_state);
 
     Router::new()
+        .fallback(controllers::fallback_handler)
         .route("/health", routing::get(health::health))
         .route("/metrics", routing::get(metrics::get_metrics))
         .with_state(shared_state)

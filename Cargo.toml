@@ -37,6 +37,7 @@ hyper = { version = "1.11", default-features = false }
 libc = { version = "0.2.159", default-features = false }
 log = { version = "0.4.22", default-features = false }
 network-types = { version = "0.2", default-features = false }
+problemdetails = { version = "0.7", default-features = false }
 prometheus = { version = "0.14", default-features = false }
 quote = { version = "1.0", default-features = false }
 serde = { version = "1.0", default-features = false }

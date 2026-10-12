@@ -1113,13 +1113,14 @@ dependencies = [
  "noct-db",
  "noct-macros",
  "noct-web",
+ "problemdetails",
  "prometheus",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "tower",
- "tower-http",
+ "tower-http 0.7.1",
  "tracing",
 ]
 
@@ -1262,6 +1263,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d83eb9bc6d8e5cf568e7a1101d60ee05e81ed50ea106026f3d18deeb046d7661"
 dependencies = [
  "zerovec",
+]
+
+[[package]]
+name = "problemdetails"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04daf393f0478d528d04a414883374b607f1877f64939d3ea0ae315cb9f129f2"
+dependencies = [
+ "axum",
+ "http",
+ "serde",
+ "serde_json",
+ "tower-http 0.6.11",
 ]
 
 [[package]]
@@ -1461,6 +1475,7 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -1768,6 +1783,24 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-util",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "pin-project-lite",
  "tower-layer",
  "tower-service",
  "tracing",

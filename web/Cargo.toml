@@ -14,6 +14,7 @@ noct-db = { path = "../db" }
 
 anyhow = { workspace = true }
 axum = { workspace = true, default-features = true, features = ["macros"] }
+problemdetails = { workspace = true, features = ["axum"] }
 prometheus = { workspace = true, default-features = true }
 serde = { workspace = true, features = ["std", "derive"] }
 serde_json = { workspace = true, features = ["std"] }
