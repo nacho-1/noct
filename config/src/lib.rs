@@ -176,7 +176,7 @@ impl Display for Environment {
 ///
 /// If the `APP_ENVIRONMENT` env var is set,
 /// the application environment is parsed from that (which might fail if an invalid environment is set).
-/// If the env var is not set, [`Environment::Development`] is returned.
+/// If the env var is not set, [Environment::Development] is returned.
 pub fn get_env() -> Result<Environment, anyhow::Error> {
     match env::var("APP_ENVIRONMENT") {
         Ok(val) => {
@@ -190,7 +190,7 @@ pub fn get_env() -> Result<Environment, anyhow::Error> {
     }
 }
 
-/// Parses an [`Environment`] from a string.
+/// Parses an [Environment] from a string.
 ///
 /// The environment can be passed in different forms, e.g. "dev", "development", "prod", etc.
 /// If an invalid environment is passed, an error is returned.

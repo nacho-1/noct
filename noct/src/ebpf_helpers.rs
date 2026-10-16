@@ -88,7 +88,7 @@ pub fn read_event_array(
 
                     res = shdn.recv() => {
                         match res {
-                            Ok(()) => {
+                            Ok(_) => {
                                 return Ok(());
                             }
                             Err(e) => {
@@ -119,6 +119,7 @@ fn read_event_buffer(
             for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
                 dst.write(*src);
             }
+            // SAFETY: The loop above wrote every byte of `data`. Type is Pod.
             let data = unsafe { data.assume_init() };
             events.push(data);
         }
@@ -152,7 +153,7 @@ pub fn init_ebpf_logger(
 
                 res = shutdown.recv() => {
                     match res {
-                        Ok(()) => {
+                        Ok(_) => {
                             tracing::info!("shutting down ebpf logger");
                             return Ok(());
                         }

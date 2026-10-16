@@ -19,7 +19,7 @@ impl AppState {
 /// The application's state as it is shared across the application,
 /// e.g. in controllers and middlewares.
 ///
-/// This is the [`AppState`] struct wrappend in an [`std::sync::Arc`].
+/// This is the [AppState] struct wrappend in an [std::sync::Arc].
 pub type SharedAppState = Arc<AppState>;
 
 /// Initializes the application state.
