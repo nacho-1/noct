@@ -1,7 +1,5 @@
 use core::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr};
-
-use either::Either;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 const IPPROTO_TCP: u8 = 6;
 const IPPROTO_UDP: u8 = 17;
@@ -12,9 +10,9 @@ const IPPROTO_UDP: u8 = 17;
 #[cfg_attr(feature = "test-helpers", derive(Clone))]
 pub struct PacketEvent {
     /// Source IP address.
-    pub src_addr: Either<Ipv4Addr, Ipv6Addr>,
+    pub src_addr: IpAddr,
     /// Destination IP address.
-    pub dst_addr: Either<Ipv4Addr, Ipv6Addr>,
+    pub dst_addr: IpAddr,
     /// Source port. Host endianness.
     pub src_port: u16,
     /// Destination port. Host endianness.
@@ -29,9 +27,21 @@ pub struct PacketEvent {
 
 impl From<noct_common::PacketEvent> for PacketEvent {
     fn from(value: noct_common::PacketEvent) -> Self {
+        fn parse_addr(raw_addr: [u8; 16], addr_type: u8) -> IpAddr {
+            match addr_type {
+                noct_common::IP4_ADDR_TYPE => {
+                    IpAddr::V4(Ipv4Addr::from_octets(raw_addr[12..16].try_into().unwrap()))
+                }
+                noct_common::IP6_ADDR_TYPE => {
+                    IpAddr::V6(Ipv6Addr::from_octets(raw_addr))
+                }
+                _ => panic!("bad addr type: {addr_type}")
+            }
+        }
+
         PacketEvent {
-            src_addr: Either::Left(value.src_addr),
-            dst_addr: Either::Left(value.dst_addr),
+            src_addr: parse_addr(value.src_addr, value.addr_type),
+            dst_addr: parse_addr(value.dst_addr, value.addr_type),
             src_port: value.src_port,
             dst_port: value.dst_port,
             pkt_len: value.pkt_len,

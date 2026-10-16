@@ -6,7 +6,7 @@ edition.workspace = true
 publish = false
 
 [features]
-test-helpers = ["dep:noct-macros", "dep:either", "dep:hyper", "dep:tower"]
+test-helpers = ["dep:noct-macros", "dep:hyper", "dep:tower"]
 
 [dependencies]
 noct-config = { path = "../config" }
@@ -24,7 +24,6 @@ tower-http = { workspace = true, default-features = true, features = ["full"] }
 tracing = { workspace = true }
 
 noct-macros = { path = "../macros", optional = true }
-either = { workspace = true, default-features = true, optional = true }
 hyper = { workspace = true, features = ["full"], optional = true }
 tower = { workspace = true, features = ["full"], optional = true }
 

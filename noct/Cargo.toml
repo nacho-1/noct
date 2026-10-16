@@ -6,7 +6,7 @@ edition.workspace = true
 publish = false
 
 [features]
-test-helpers = ["dep:either", "dep:etherparse"]
+test-helpers = ["dep:etherparse"]
 
 [dependencies]
 noct-common = { path = "../common", features = ["user"] }
@@ -17,7 +17,6 @@ noct-web = { path = "../web" }
 anyhow = { workspace = true, default-features = true }
 aya = { workspace = true }
 aya-log = { workspace = true }
-either = { workspace = true, default-features = true, optional = true }
 etherparse = { workspace = true, default-features = true, optional = true }
 libc = { workspace = true }
 log = { workspace = true }

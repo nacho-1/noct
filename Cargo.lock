@@ -1037,7 +1037,6 @@ dependencies = [
  "aya-build",
  "aya-log",
  "cargo_metadata",
- "either",
  "etherparse",
  "libc",
  "log",
@@ -1076,7 +1075,6 @@ dependencies = [
 name = "noct-db"
 version = "0.1.0"
 dependencies = [
- "either",
  "noct-common",
  "noct-db",
  "tokio",
@@ -1107,7 +1105,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "either",
  "hyper",
  "noct-config",
  "noct-db",

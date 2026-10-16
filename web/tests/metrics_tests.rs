@@ -1,14 +1,13 @@
-use std::net::Ipv4Addr;
+use std::{net::{IpAddr, Ipv4Addr, Ipv6Addr}, str::FromStr};
 
-use either::Either;
 use hyper::StatusCode;
 use noct_db::{EventMsg, IpProto, PacketEvent};
 use noct_web::test_helpers::{BodyExt, RouterExt, TestContext};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
 const TEMPLATE_PACKET_EVENT: PacketEvent = PacketEvent {
-    src_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 1)),
-    dst_addr: Either::Left(Ipv4Addr::new(192, 168, 0, 2)),
+    src_addr: IpAddr::V4(Ipv4Addr::new(192, 168, 0, 1)),
+    dst_addr: IpAddr::V4(Ipv4Addr::new(192, 168, 0, 2)),
     src_port: 12345,
     dst_port: 54321,
     pkt_len: 30,
@@ -190,6 +189,51 @@ async fn test_multiple_protocols(context: &TestContext) {
     tokio::join!(
         send_event(TEMPLATE_PACKET_EVENT, &context.ingress_stats_tx),
         send_event(TEMPLATE_PACKET_EVENT, &context.egress_stats_tx),
+        send_event(tcp_event.clone(), &context.ingress_stats_tx),
+        send_event(tcp_event, &context.egress_stats_tx),
+        send_event(other_proto_event.clone(), &context.ingress_stats_tx),
+        send_event(other_proto_event, &context.egress_stats_tx),
+    );
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("incoming_traffic_bytes{protocol=\"Other\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"Other\"} 30"));
+}
+
+#[noct_macros::test]
+async fn test_multiple_protocols_ip6(context: &TestContext) {
+    let tcp_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let udp_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let other_proto_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        protocol: IpProto::Other,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    tokio::join!(
+        send_event(udp_event.clone(), &context.ingress_stats_tx),
+        send_event(udp_event, &context.egress_stats_tx),
         send_event(tcp_event.clone(), &context.ingress_stats_tx),
         send_event(tcp_event, &context.egress_stats_tx),
         send_event(other_proto_event.clone(), &context.ingress_stats_tx),
