@@ -32,10 +32,8 @@ impl From<noct_common::PacketEvent> for PacketEvent {
                 noct_common::IP4_ADDR_TYPE => {
                     IpAddr::V4(Ipv4Addr::from_octets(raw_addr[12..16].try_into().unwrap()))
                 }
-                noct_common::IP6_ADDR_TYPE => {
-                    IpAddr::V6(Ipv6Addr::from_octets(raw_addr))
-                }
-                _ => panic!("bad addr type: {addr_type}")
+                noct_common::IP6_ADDR_TYPE => IpAddr::V6(Ipv6Addr::from_octets(raw_addr)),
+                _ => panic!("bad addr type: {addr_type}"),
             }
         }
 

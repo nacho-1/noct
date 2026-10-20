@@ -1,4 +1,7 @@
-use std::{net::{IpAddr, Ipv4Addr, Ipv6Addr}, str::FromStr};
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    str::FromStr,
+};
 
 use aya::{Ebpf, TestRun, TestRunOptions, maps::PerfEventArray, programs::CgroupSkb};
 use etherparse::{Ethernet2Header, PacketBuilder, PacketBuilderStep};
@@ -429,4 +432,3 @@ async fn test_single_packet_ip6_tcp() -> anyhow::Result<()> {
 
     Ok(())
 }
-

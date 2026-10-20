@@ -60,4 +60,3 @@ pub fn encode_ip4_addr(addr: Ipv4Addr) -> [u8; 16] {
     ret[12..].copy_from_slice(&addr);
     ret
 }
-
