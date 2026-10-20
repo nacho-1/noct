@@ -2,18 +2,30 @@
 #![no_main]
 
 use aya_ebpf::{
-    macros::{cgroup_skb, map},
+    bindings::{
+        BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB, BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB,
+        BPF_SOCK_OPS_RETRANS_CB, BPF_SOCK_OPS_RETRANS_CB_FLAG, BPF_SOCK_OPS_RTT_CB,
+        BPF_SOCK_OPS_RTT_CB_FLAG, BPF_SOCK_OPS_STATE_CB, BPF_SOCK_OPS_STATE_CB_FLAG,
+        BPF_TCP_ESTABLISHED,
+    },
+    helpers::generated::bpf_sock_ops_cb_flags_set,
+    macros::{cgroup_skb, map, sock_ops},
     maps::PerfEventArray,
-    programs::SkBuffContext,
+    programs::{SkBuffContext, SockOpsContext},
 };
-use aya_log_ebpf::error;
+use aya_log_ebpf::{debug, error};
 use network_types::{
-    eth::EtherType, ip::{IpError, IpProto, Ipv4Hdr, Ipv6Hdr}, tcp::TcpHdr, udp::UdpHdr,
+    eth::EtherType,
+    ip::{IpError, IpProto, Ipv4Hdr, Ipv6Hdr},
+    tcp::TcpHdr,
+    udp::UdpHdr,
 };
 use noct_common::PacketEvent;
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
+/// Return value for successful `sock_ops` program.
+const SOCK_OPS_SUCCESS: u32 = 1;
 
 /// Array for transmitting ingress packet stats.
 #[map]
@@ -31,6 +43,40 @@ pub fn ingress(ctx: SkBuffContext) -> i32 {
 #[cgroup_skb]
 pub fn egress(ctx: SkBuffContext) -> i32 {
     process_skb(ctx, &TX_STATS)
+}
+
+#[sock_ops]
+pub fn socket_ops(ctx: SockOpsContext) -> u32 {
+    let op = ctx.op();
+
+    match op {
+        BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB | BPF_SOCK_OPS_PASSIVE_ESTABLISHED_CB => {
+            debug!(&ctx, "connection established");
+            let flags = (BPF_SOCK_OPS_RTT_CB_FLAG
+                | BPF_SOCK_OPS_RETRANS_CB_FLAG
+                | BPF_SOCK_OPS_STATE_CB_FLAG) as i32;
+            // SAFETY: Just an external call to bpf helper.
+            let ret = unsafe { bpf_sock_ops_cb_flags_set(ctx.ops, flags) };
+            if ret != 0 {
+                error!(&ctx, "failed to set sock_ops flags: {}", ret);
+            }
+        }
+        BPF_SOCK_OPS_RTT_CB => {
+            let srtt = unsafe { (*ctx.ops).srtt_us >> 3 };
+            debug!(&ctx, "recalculated RTT: {} us", srtt);
+        }
+        BPF_SOCK_OPS_RETRANS_CB => {
+            debug!(&ctx, "retransmission");
+        }
+        BPF_SOCK_OPS_STATE_CB => {
+            if ctx.arg(0) == BPF_TCP_ESTABLISHED && ctx.arg(1) != BPF_TCP_ESTABLISHED {
+                debug!(&ctx, "connection ended");
+            }
+        }
+        _ => {}
+    }
+
+    SOCK_OPS_SUCCESS
 }
 
 /// Builds [PacketEvent] from context and outputs it to the array.
@@ -65,11 +111,7 @@ fn process_skb(ctx: SkBuffContext, map: &PerfEventArray<PacketEvent>) -> i32 {
 }
 
 /// Builds [PacketEvent] from context and IPv4 header, and outputs it to the array.
-fn process_skb_ip4(
-    ctx: SkBuffContext,
-    ip4hdr: Ipv4Hdr,
-    map: &PerfEventArray<PacketEvent>,
-) -> i32 {
+fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<PacketEvent>) -> i32 {
     let protocol = match ip4hdr.proto() {
         Ok(ret) => ret,
         Err(IpError::InvalidProto(n)) => {
@@ -127,11 +169,7 @@ fn process_skb_ip4(
 }
 
 /// Builds [PacketEvent] from context and IPv6 header, and outputs it to the array.
-fn process_skb_ip6(
-    ctx: SkBuffContext,
-    ip6hdr: Ipv6Hdr,
-    map: &PerfEventArray<PacketEvent>,
-) -> i32 {
+fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<PacketEvent>) -> i32 {
     let protocol = match ip6hdr.next_hdr() {
         Ok(ret) => ret,
         Err(IpError::InvalidProto(n)) => {

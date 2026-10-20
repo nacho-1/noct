@@ -2,12 +2,10 @@ use std::{fs::File, mem::MaybeUninit, path::PathBuf};
 
 use anyhow::Context as _;
 use aya::{
-    Ebpf,
-    maps::{
+    Ebpf, maps::{
         MapData, PerfEventArray,
         perf::{PerfEvent, PerfEventArrayBuffer},
-    },
-    programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType},
+    }, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, SockOps},
 };
 use aya_log::EbpfLogger;
 use noct_db::EventMsg;
@@ -44,10 +42,14 @@ pub fn init_ebpf(ebpf: &mut Ebpf, cgroup_path: PathBuf) -> anyhow::Result<()> {
     let egress_program: &mut CgroupSkb = ebpf.program_mut("egress").unwrap().try_into()?;
     egress_program.load()?;
     egress_program.attach(
-        cgroup,
+        cgroup.try_clone()?,
         CgroupSkbAttachType::Egress,
         CgroupAttachMode::default(),
     )?;
+    let socks_program: &mut SockOps = ebpf.program_mut("socket_ops").unwrap().try_into()?;
+    socks_program.load()?;
+    socks_program.attach(cgroup, CgroupAttachMode::default())?;
+
 
     Ok(())
 }
