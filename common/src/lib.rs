@@ -36,6 +36,9 @@ pub struct PacketEvent {
     pub _pad: [u8; 2],
 }
 
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for PacketEvent {}
+
 /// Program sets `PERF_SAMPLE_RAW` which adds a 32-bit value indicating size of the data.
 /// It then is padded with 0 to have 64-bit alignment.
 /// Manual padding is added so that no additional padding is required after adding
@@ -47,10 +50,7 @@ const _: () = assert!(
     "PacketEvent isn't properly aligned!"
 );
 
-#[cfg(feature = "user")]
-unsafe impl aya::Pod for PacketEvent {}
-
-/// Encodes IPv4 address to be used in [PacketEvent].
+/// Encodes IPv4 address as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`.
 #[inline(always)]
 pub fn encode_ip4_addr(addr: Ipv4Addr) -> [u8; 16] {
     let addr = addr.to_bits().to_be_bytes();

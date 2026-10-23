@@ -28,7 +28,11 @@ async fn test_graceful_shutdown() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, _) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     shutdown_tx.send(())?;
 
@@ -54,7 +58,11 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -118,7 +126,11 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -184,7 +196,11 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -249,7 +265,11 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv4Addr::from_octets([192, 168, 1, 1]);
     let dst_addr = Ipv4Addr::from_octets([192, 168, 1, 2]);
@@ -315,7 +335,11 @@ async fn test_single_packet_ip6_udp() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv6Addr::from_str("2001:db8::1").unwrap();
     let dst_addr = Ipv6Addr::from_str("2001:db8::2").unwrap();
@@ -381,7 +405,11 @@ async fn test_single_packet_ip6_tcp() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array(ingress_stats_map, tx, shutdown_tx.subscribe())?;
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        tx,
+        shutdown_tx.subscribe(),
+    )?;
 
     let src_addr = Ipv6Addr::from_str("2001:db8::1").unwrap();
     let dst_addr = Ipv6Addr::from_str("2001:db8::2").unwrap();

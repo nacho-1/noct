@@ -1,5 +1,5 @@
 use anyhow::Context;
-use aya::{Ebpf, maps::PerfEventArray};
+use aya::{Ebpf, maps::{Array, PerfEventArray}};
 use noct_config::Config;
 use tokio::{
     signal::{self, unix::SignalKind},
@@ -11,7 +11,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 /// Helpers for managing eBPF logic.
 mod ebpf_helpers;
 
-pub use ebpf_helpers::read_event_array;
+pub use ebpf_helpers::{read_event_array, watch_conn_count};
 
 /// Initializes tracing.
 ///
@@ -59,6 +59,7 @@ pub async fn run() -> anyhow::Result<()> {
     // Get the maps for communication with kernel.
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
+    let conn_counter: Array<_, u32> = Array::try_from(ebpf.take_map("CONN_COUNT").unwrap())?;
 
     // Load the eBPF programs into the kernel at this point.
     ebpf_helpers::init_ebpf(&mut ebpf, config.cgroup_path)?;
@@ -81,10 +82,30 @@ pub async fn run() -> anyhow::Result<()> {
     // in userspace.
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    let ingress_readers =
-        read_event_array(ingress_stats_map, ingress_stats_tx, shutdown_tx.subscribe())?;
-    let egress_readers =
-        read_event_array(egress_stats_map, egress_stats_tx, shutdown_tx.subscribe())?;
+    let (conn_count_tx, mut conns_count_rx) = mpsc::unbounded_channel();
+    let ingress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        ingress_stats_map,
+        ingress_stats_tx,
+        shutdown_tx.subscribe(),
+    )?;
+    let egress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        egress_stats_map,
+        egress_stats_tx,
+        shutdown_tx.subscribe(),
+    )?;
+    let conn_count_watcher = tokio::spawn(
+        watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
+    );
+    tokio::spawn(async move {
+        loop {
+            match conns_count_rx.recv().await {
+                Some(msg) => {
+                    tracing::debug!("active connections: {}", msg.event);
+                }
+                None => return,
+            }
+        }
+    });
 
     let server = tokio::spawn(noct_web::run(
         config.server,
@@ -135,6 +156,16 @@ pub async fn run() -> anyhow::Result<()> {
             Err(e) => {
                 tracing::error!("failed to join egress stats reader: {e}");
             }
+        }
+    }
+    match conn_count_watcher.await {
+        Ok(res) => {
+            if let Err(e) = res {
+                tracing::error!("connection count watcher error: {e}");
+            }
+        }
+        Err(e) => {
+            tracing::error!("failed to join connection count watcher: {e}");
         }
     }
 

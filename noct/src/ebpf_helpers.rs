@@ -1,11 +1,13 @@
-use std::{fs::File, mem::MaybeUninit, path::PathBuf};
+use std::{fs::File, mem::MaybeUninit, path::PathBuf, time::Duration};
 
 use anyhow::Context as _;
 use aya::{
-    Ebpf, maps::{
-        MapData, PerfEventArray,
+    Ebpf,
+    maps::{
+        Array, MapData, PerfEventArray,
         perf::{PerfEvent, PerfEventArrayBuffer},
-    }, programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, SockOps},
+    },
+    programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, SockOps},
 };
 use aya_log::EbpfLogger;
 use noct_db::EventMsg;
@@ -50,22 +52,26 @@ pub fn init_ebpf(ebpf: &mut Ebpf, cgroup_path: PathBuf) -> anyhow::Result<()> {
     socks_program.load()?;
     socks_program.attach(cgroup, CgroupAttachMode::default())?;
 
-
     Ok(())
 }
 
 /// Reads the event array and pushes the events into a channel.
 ///
+/// Expects events of type [T] and outputs events of type [U].
 /// The function spawns a task for each online CPU to read the array,
 /// since there's one per CPU.
 /// Returns the handles to the tasks.
 /// The tasks will exit normally if the receiving side of the channel
 /// is closed or if a shutdown broadcast is received.
-pub fn read_event_array(
+pub fn read_event_array<T, U>(
     mut array: PerfEventArray<MapData>,
-    sender: UnboundedSender<EventMsg<noct_db::PacketEvent>>,
+    sender: UnboundedSender<EventMsg<U>>,
     shutdown: broadcast::Receiver<()>,
-) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>> {
+) -> anyhow::Result<Vec<JoinHandle<anyhow::Result<()>>>>
+where
+    T: aya::Pod,
+    U: From<T> + Send + 'static,
+{
     let mut handles = Vec::new();
 
     for cpu_id in aya::util::online_cpus().map_err(|(_, error)| error)? {
@@ -81,7 +87,7 @@ pub fn read_event_array(
                         let guard = guard?;
                         let events = read_event_buffer(guard);
                         for event in events {
-                            let event = noct_db::PacketEvent::from(event);
+                            let event = U::from(event);
                             if let Err(_) = tx.send(EventMsg::new(event)) {
                                 return Ok(());
                             }
@@ -109,14 +115,17 @@ pub fn read_event_array(
 }
 
 /// Reads the event array buffer and initializes each event.
-fn read_event_buffer(
+fn read_event_buffer<T>(
     mut guard: AsyncFdReadyMutGuard<'_, PerfEventArrayBuffer<MapData>>,
-) -> Vec<noct_common::PacketEvent> {
+) -> Vec<T>
+where
+    T: aya::Pod,
+{
     let mut events = Vec::new();
 
     guard.get_inner_mut().for_each(|event| match event {
         PerfEvent::Sample { head, tail } => {
-            let mut data = MaybeUninit::<noct_common::PacketEvent>::uninit();
+            let mut data = MaybeUninit::<T>::uninit();
             let bytes = as_bytes_mut(&mut data);
             for (dst, src) in bytes.iter_mut().zip(head.iter().chain(tail)) {
                 dst.write(*src);
@@ -132,6 +141,35 @@ fn read_event_buffer(
     guard.clear_ready();
 
     events
+}
+
+/// Watches the current connection counter from the eBPF program.
+pub async fn watch_conn_count(
+    array: Array<MapData, u32>,
+    sender: UnboundedSender<EventMsg<u32>>,
+    mut shutdown: broadcast::Receiver<()>,
+) -> anyhow::Result<()> {
+    let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => {
+                let active_conns = array.get(&0, 0)?;
+                if let Err(_) = sender.send(EventMsg::new(active_conns)) {
+                    return Ok(());
+                }
+            }
+            res = shutdown.recv() => {
+                match res {
+                    Ok(_) => {
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Initializes the eBPF logger.

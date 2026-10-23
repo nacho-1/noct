@@ -1,38 +1,13 @@
-#[cfg(feature = "test-helpers")]
-use tokio::sync::oneshot;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-/// Wraper for communicating events through channels.
-///
-/// Necessary to be able to sync via acknowledgements.
-pub struct EventMsg<T> {
-    /// The event to communicate.
-    pub event: T,
-    /// One shot for responding with acknowledgements.
-    /// Only available when compiling for tests.
-    #[cfg(feature = "test-helpers")]
-    pub ack: Option<oneshot::Sender<()>>,
-}
+pub mod event_msg;
 
-impl<T> EventMsg<T> {
-    /// Create a new message.
-    ///
-    /// Meant to be used by the application.
-    pub fn new(event: T) -> Self {
-        Self {
-            event,
-            #[cfg(feature = "test-helpers")]
-            ack: None,
+pub fn parse_addr(raw_addr: [u8; 16], addr_type: u8) -> IpAddr {
+    match addr_type {
+        noct_common::IP4_ADDR_TYPE => {
+            IpAddr::V4(Ipv4Addr::from_octets(raw_addr[12..16].try_into().unwrap()))
         }
-    }
-
-    /// Create a new message with a channel for the response.
-    ///
-    /// Meant to be used by tests.
-    #[cfg(feature = "test-helpers")]
-    pub fn with_ack(event: T, ack: oneshot::Sender<()>) -> Self {
-        Self {
-            event,
-            ack: Some(ack),
-        }
+        noct_common::IP6_ADDR_TYPE => IpAddr::V6(Ipv6Addr::from_octets(raw_addr)),
+        _ => panic!("bad addr type: {addr_type}"),
     }
 }
