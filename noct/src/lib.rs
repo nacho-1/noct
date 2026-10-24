@@ -82,7 +82,7 @@ pub async fn run() -> anyhow::Result<()> {
     // in userspace.
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    let (conn_count_tx, mut conns_count_rx) = mpsc::unbounded_channel();
+    let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
     let ingress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
         ingress_stats_map,
         ingress_stats_tx,
@@ -96,21 +96,12 @@ pub async fn run() -> anyhow::Result<()> {
     let conn_count_watcher = tokio::spawn(
         watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
     );
-    tokio::spawn(async move {
-        loop {
-            match conns_count_rx.recv().await {
-                Some(msg) => {
-                    tracing::debug!("active connections: {}", msg.event);
-                }
-                None => return,
-            }
-        }
-    });
 
     let server = tokio::spawn(noct_web::run(
         config.server,
         ingress_stats_rx,
         egress_stats_rx,
+        conn_count_rx,
         shutdown_tx.subscribe(),
     ));
 

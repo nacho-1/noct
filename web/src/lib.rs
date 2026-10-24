@@ -1,5 +1,5 @@
 use noct_config::ServerConfig;
-use noct_db::{EventMsg, PacketEvent};
+use noct_db::{ConnectionCount, EventMsg, PacketEvent};
 use tokio::{
     net::TcpListener,
     sync::{broadcast, mpsc::UnboundedReceiver},
@@ -25,9 +25,14 @@ pub async fn run(
     config: ServerConfig,
     ingress_stats_rx: UnboundedReceiver<EventMsg<PacketEvent>>,
     egress_stats_rx: UnboundedReceiver<EventMsg<PacketEvent>>,
+    conn_count_rx: UnboundedReceiver<EventMsg<ConnectionCount>>,
     mut shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
-    let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx).await?;
+    let app_state = state::init_app_state(
+        ingress_stats_rx,
+        egress_stats_rx,
+        conn_count_rx
+    ).await?;
     let app = routes::init_routes(app_state);
 
     let addr = config.addr();

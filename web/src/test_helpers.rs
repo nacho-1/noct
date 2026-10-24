@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 use hyper::{HeaderMap, Method};
-use noct_db::{EventMsg, PacketEvent};
+use noct_db::{ConnectionCount, EventMsg, PacketEvent};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tower::ServiceExt;
 
@@ -131,6 +131,8 @@ pub struct TestContext {
     pub ingress_stats_tx: UnboundedSender<EventMsg<PacketEvent>>,
     /// Channel for sending egress stats.
     pub egress_stats_tx: UnboundedSender<EventMsg<PacketEvent>>,
+    /// Channel for sending updates to the connection counter.
+    pub conn_count_tx: UnboundedSender<EventMsg<ConnectionCount>>,
 }
 
 /// Sets up a test and returns a [TestContext].
@@ -142,7 +144,13 @@ pub struct TestContext {
 pub async fn setup() -> TestContext {
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx)
+    let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
+    let app_state =
+        state::init_app_state(
+            ingress_stats_rx,
+            egress_stats_rx,
+            conn_count_rx,
+        )
         .await
         .expect("must initialize app state");
     let app = routes::init_routes(app_state);
@@ -151,5 +159,6 @@ pub async fn setup() -> TestContext {
         app,
         ingress_stats_tx,
         egress_stats_tx,
+        conn_count_tx,
     }
 }

@@ -6,6 +6,10 @@ use core::net::Ipv4Addr;
 pub const IP4_ADDR_TYPE: u8 = 0;
 /// Value for IPv6 addresses.
 pub const IP6_ADDR_TYPE: u8 = 1;
+/// Array element for IPv4 connections counter.
+pub const IP4_CONN_POS: u32 = 0;
+/// Array element for IPv6 connections counter.
+pub const IP6_CONN_POS: u32 = 1;
 
 /// Packet events passed from cgroup_skb programs to userspace via a PerfEventArray.
 ///

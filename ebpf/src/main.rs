@@ -24,12 +24,16 @@ use network_types::{
     tcp::TcpHdr,
     udp::UdpHdr,
 };
-use noct_common::PacketEvent;
+use noct_common::{IP4_CONN_POS, IP6_CONN_POS, PacketEvent};
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
 /// Return value for successful `sock_ops` program.
 const SOCK_OPS_SUCCESS: u32 = 1;
+/// Socket value for IPv4 addresses.
+const AF_INET: u32 = 2;
+/// Socket value for IPv6 addresses.
+const AF_INET6: u32 = 10;
 
 /// Array for transmitting ingress packet stats.
 #[map]
@@ -51,7 +55,7 @@ static ACTIVE_CONNS: HashMap<u64, u8> = HashMap::with_max_entries(65535, 0);
 ///
 /// Used to determine number of connections in O(1).
 #[map]
-static CONN_COUNT: Array<u32> = Array::with_max_entries(1, 0);
+static CONN_COUNT: Array<u32> = Array::with_max_entries(2, 0);
 
 #[cgroup_skb]
 pub fn ingress(ctx: SkBuffContext) -> i32 {
@@ -241,6 +245,15 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
 /// Adds the socket cookie to the connection-tracker
 /// and adds 1 to the connection-counter.
 fn process_conn_established(ctx: SockOpsContext) {
+    // Check for IPv4 or IPv6. Otherwise don't track.
+    let array_pos = match ctx.family() {
+        AF_INET => IP4_CONN_POS,
+        AF_INET6 => IP6_CONN_POS,
+        _ => {
+            return;
+        }
+    };
+
     let flags = (BPF_SOCK_OPS_RTT_CB_FLAG
         | BPF_SOCK_OPS_RETRANS_CB_FLAG
         | BPF_SOCK_OPS_STATE_CB_FLAG) as i32;
@@ -254,7 +267,7 @@ fn process_conn_established(ctx: SockOpsContext) {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut _) };
 
     if ACTIVE_CONNS.insert(cookie, 1, BPF_NOEXIST as u64).is_ok() {
-        if let Some(counter) = CONN_COUNT.get_ptr_mut(0) {
+        if let Some(counter) = CONN_COUNT.get_ptr_mut(array_pos) {
             // From what I could find this is the main way of doing atomic addition
             // see aya/test/integration-ebpf/src/kprobe.rs.
             // SAFETY: Value lives for the whole program.
@@ -283,7 +296,15 @@ fn process_conn_state_change(ctx: SockOpsContext) {
     let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut _) };
 
     if ACTIVE_CONNS.remove(cookie).is_ok() {
-        if let Some(counter) = CONN_COUNT.get_ptr_mut(0) {
+        let array_pos = match ctx.family() {
+            AF_INET => IP4_CONN_POS,
+            AF_INET6 => IP6_CONN_POS,
+            _ => {
+                return;
+            }
+        };
+
+        if let Some(counter) = CONN_COUNT.get_ptr_mut(array_pos) {
             // Don't like this but it appears atomic_xsub
             // has no corresponding BPF operation for LLVM/bpf_linker or something.
             // SAFETY: Value lives for the whole program.

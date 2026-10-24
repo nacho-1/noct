@@ -10,7 +10,8 @@ use aya::{
     programs::{CgroupAttachMode, CgroupSkb, CgroupSkbAttachType, SockOps},
 };
 use aya_log::EbpfLogger;
-use noct_db::EventMsg;
+use noct_common::{IP4_CONN_POS, IP6_CONN_POS};
+use noct_db::{AddrType, ConnectionCount, EventMsg};
 use tokio::{
     io::{
         Interest,
@@ -144,18 +145,28 @@ where
 }
 
 /// Watches the current connection counter from the eBPF program.
+///
+/// Sends samples of the active connection counter maintained
+/// by the eBPF programs every certain amount of time.
 pub async fn watch_conn_count(
     array: Array<MapData, u32>,
-    sender: UnboundedSender<EventMsg<u32>>,
+    sender: UnboundedSender<EventMsg<ConnectionCount>>,
     mut shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                let active_conns = array.get(&0, 0)?;
-                if let Err(_) = sender.send(EventMsg::new(active_conns)) {
-                    return Ok(());
+                for (addr_type, pos) in [
+                    (AddrType::IPv4, IP4_CONN_POS),
+                    (AddrType::IPv6, IP6_CONN_POS),
+                ] {
+                    let count = array.get(&pos, 0)?;
+                    if let Err(_) = sender.send(EventMsg::new(
+                        noct_db::ConnectionCount { addr_type, count }
+                    )) {
+                        return Ok(());
+                    }
                 }
             }
             res = shutdown.recv() => {
