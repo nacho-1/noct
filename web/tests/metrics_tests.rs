@@ -4,7 +4,7 @@ use std::{
 };
 
 use hyper::StatusCode;
-use noct_db::{EventMsg, IpProto, PacketEvent};
+use noct_db::{ConnectionCount, EventMsg, IpProto, PacketEvent};
 use noct_web::test_helpers::{BodyExt, RouterExt, TestContext};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
@@ -18,7 +18,7 @@ const TEMPLATE_PACKET_EVENT: PacketEvent = PacketEvent {
     protocol: IpProto::UDP,
 };
 
-async fn send_event(event: PacketEvent, tx: &UnboundedSender<EventMsg<PacketEvent>>) {
+async fn send_event<T>(event: T, tx: &UnboundedSender<EventMsg<T>>) {
     let (ack_rx, ack_tx) = oneshot::channel();
     let msg = EventMsg::with_ack(event, ack_rx);
     tx.send(msg).unwrap();
@@ -257,3 +257,111 @@ async fn test_multiple_protocols_ip6(context: &TestContext) {
     assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"UDP\"} 30"));
     assert!(metrics.contains("outgoing_traffic_bytes{protocol=\"Other\"} 30"));
 }
+
+#[noct_macros::test]
+async fn test_single_connection_ip4(context: &TestContext) {
+    let event = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv4,
+        count: 1,
+    };
+    send_event(event, &context.conn_count_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 1"));
+    assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_single_connection_ip6(context: &TestContext) {
+    let event = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv6,
+        count: 1,
+    };
+    send_event(event, &context.conn_count_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 0"));
+    assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 1"));
+}
+
+#[noct_macros::test]
+async fn test_multiple_connections(context: &TestContext) {
+    let event1 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv4,
+        count: 3,
+    };
+    let event2 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv6,
+        count: 2,
+    };
+    send_event(event1, &context.conn_count_tx).await;
+    send_event(event2, &context.conn_count_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 3"));
+    assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 2"));
+}
+
+#[noct_macros::test]
+async fn test_connections_ending(context: &TestContext) {
+    let event1 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv4,
+        count: 1,
+    };
+    let event2 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv6,
+        count: 1,
+    };
+    send_event(event1, &context.conn_count_tx).await;
+    send_event(event2, &context.conn_count_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 1"));
+    assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 1"));
+
+    let event1 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv4,
+        count: 0,
+    };
+    let event2 = ConnectionCount {
+        addr_type: noct_db::AddrType::IPv6,
+        count: 0,
+    };
+    send_event(event1, &context.conn_count_tx).await;
+    send_event(event2, &context.conn_count_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 0"));
+    assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 0"));
+}
+

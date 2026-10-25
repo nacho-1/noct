@@ -78,6 +78,12 @@ async fn read_active_connections(
         gauge
             .with_label_values(&[&addr_type])
             .set(i64::from(msg.event.count));
+
+        // Same as read_traffic_events
+        #[cfg(feature = "test-helpers")]
+        if let Some(ack) = msg.ack {
+            let _ = ack.send(());
+        }
     }
 }
 
