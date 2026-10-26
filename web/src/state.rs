@@ -31,9 +31,9 @@ pub async fn init_app_state(
     let registry = Registry::new();
 
     let in_traffic =
-        init_traffic_counter("incoming_traffic_bytes", "Total amount of incoming traffic")?;
+        init_traffic_counter("incoming_traffic_count", "Total amount of incoming traffic")?;
     let out_traffic =
-        init_traffic_counter("outgoing_traffic_bytes", "Total amount of outgoing traffic")?;
+        init_traffic_counter("outgoing_traffic_count", "Total amount of outgoing traffic")?;
     let active_conns =
         init_connections_gauge("active_connections", "Number of active connections")?;
 

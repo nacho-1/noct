@@ -1,0 +1,246 @@
+use std::{
+    net::{IpAddr, Ipv6Addr},
+    str::FromStr,
+};
+
+use hyper::StatusCode;
+use noct_db::{IpProto, PacketEvent};
+use noct_web::test_helpers::{BodyExt, RouterExt, TestContext};
+
+use crate::common::{TEMPLATE_PACKET_EVENT, send_event};
+
+mod common;
+
+#[noct_macros::test]
+async fn test_empty_metrics(context: &TestContext) {
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_incoming_tcp(context: &TestContext) {
+    let event = PacketEvent {
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    send_event(event, &context.ingress_stats_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_outgoing_tcp(context: &TestContext) {
+    let event = PacketEvent {
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    send_event(event, &context.egress_stats_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_tcp_handshake(context: &TestContext) {
+    let syn = PacketEvent {
+        pkt_len: 60,
+        payload_len: 0,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let syn_ack = PacketEvent {
+        pkt_len: 60,
+        payload_len: 0,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let ack = PacketEvent {
+        pkt_len: 52,
+        payload_len: 0,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    tokio::join!(
+        send_event(syn, &context.ingress_stats_tx),
+        send_event(syn_ack, &context.egress_stats_tx),
+        send_event(ack, &context.ingress_stats_tx),
+    );
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 112"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 60"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_metrics_udp(context: &TestContext) {
+    send_event(TEMPLATE_PACKET_EVENT, &context.ingress_stats_tx).await;
+    send_event(TEMPLATE_PACKET_EVENT, &context.egress_stats_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 0"));
+}
+
+#[noct_macros::test]
+async fn test_metrics_other_protocol(context: &TestContext) {
+    let event = PacketEvent {
+        protocol: IpProto::Other,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    send_event(event.clone(), &context.ingress_stats_tx).await;
+    send_event(event.clone(), &context.egress_stats_tx).await;
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 0"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 30"));
+}
+
+#[noct_macros::test]
+async fn test_multiple_protocols(context: &TestContext) {
+    let tcp_event = PacketEvent {
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let other_proto_event = PacketEvent {
+        protocol: IpProto::Other,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    tokio::join!(
+        send_event(TEMPLATE_PACKET_EVENT, &context.ingress_stats_tx),
+        send_event(TEMPLATE_PACKET_EVENT, &context.egress_stats_tx),
+        send_event(tcp_event.clone(), &context.ingress_stats_tx),
+        send_event(tcp_event, &context.egress_stats_tx),
+        send_event(other_proto_event.clone(), &context.ingress_stats_tx),
+        send_event(other_proto_event, &context.egress_stats_tx),
+    );
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 30"));
+}
+
+#[noct_macros::test]
+async fn test_multiple_protocols_ip6(context: &TestContext) {
+    let tcp_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        pkt_len: 42,
+        payload_len: 2,
+        protocol: IpProto::TCP,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let udp_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        ..TEMPLATE_PACKET_EVENT
+    };
+    let other_proto_event = PacketEvent {
+        src_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::1").unwrap()),
+        dst_addr: IpAddr::V6(Ipv6Addr::from_str("2008:db8::2").unwrap()),
+        protocol: IpProto::Other,
+        ..TEMPLATE_PACKET_EVENT
+    };
+    tokio::join!(
+        send_event(udp_event.clone(), &context.ingress_stats_tx),
+        send_event(udp_event, &context.egress_stats_tx),
+        send_event(tcp_event.clone(), &context.ingress_stats_tx),
+        send_event(tcp_event, &context.egress_stats_tx),
+        send_event(other_proto_event.clone(), &context.ingress_stats_tx),
+        send_event(other_proto_event, &context.egress_stats_tx),
+    );
+
+    let response = context.app.request("/metrics").send().await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let metrics = response.into_body().into_bytes().await;
+    let metrics = String::from_utf8(metrics.to_vec()).unwrap();
+
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("incoming_traffic_count{protocol=\"Other\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"TCP\"} 42"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 30"));
+    assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 30"));
+}
+
