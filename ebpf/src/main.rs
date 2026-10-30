@@ -3,7 +3,7 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 
-use core::intrinsics::{self, AtomicOrdering};
+use core::{array, intrinsics::{self, AtomicOrdering}, net::Ipv4Addr};
 
 use aya_ebpf::{
     bindings::{
@@ -24,7 +24,7 @@ use network_types::{
     tcp::TcpHdr,
     udp::UdpHdr,
 };
-use noct_common::{IP4_CONN_POS, IP6_CONN_POS, PacketEvent};
+use noct_common::{ConnectionSRTT, IP4_ADDR_TYPE, IP4_CONN_POS, IP6_ADDR_TYPE, IP6_CONN_POS, PacketEvent};
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
@@ -42,6 +42,10 @@ static RX_STATS: PerfEventArray<PacketEvent> = PerfEventArray::new(0);
 /// Array for transmitting egress packet stats.
 #[map]
 static TX_STATS: PerfEventArray<PacketEvent> = PerfEventArray::new(0);
+
+/// Array for transmitting connection SRTT values.
+#[map]
+static SRTT_UPDATES: PerfEventArray<ConnectionSRTT> = PerfEventArray::new(0);
 
 /// Map for tracking active connections.
 ///
@@ -76,8 +80,7 @@ pub fn socket_ops(ctx: SockOpsContext) -> u32 {
             process_conn_established(ctx);
         }
         BPF_SOCK_OPS_RTT_CB => {
-            let srtt = unsafe { (*ctx.ops).srtt_us >> 3 };
-            debug!(&ctx, "recalculated RTT: {} us", srtt);
+            process_rtt_update(ctx);
         }
         BPF_SOCK_OPS_RETRANS_CB => {
             debug!(&ctx, "retransmission");
@@ -123,6 +126,7 @@ fn process_skb(ctx: SkBuffContext, map: &PerfEventArray<PacketEvent>) -> i32 {
 }
 
 /// Builds [PacketEvent] from context and IPv4 header, and outputs it to the array.
+#[inline(always)]
 fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<PacketEvent>) -> i32 {
     let protocol = match ip4hdr.proto() {
         Ok(ret) => ret,
@@ -181,6 +185,7 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
 }
 
 /// Builds [PacketEvent] from context and IPv6 header, and outputs it to the array.
+#[inline(always)]
 fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<PacketEvent>) -> i32 {
     let protocol = match ip6hdr.next_hdr() {
         Ok(ret) => ret,
@@ -244,6 +249,7 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
 /// throughout the socket's lifetime.
 /// Adds the socket cookie to the connection-tracker
 /// and adds 1 to the connection-counter.
+#[inline(always)]
 fn process_conn_established(ctx: SockOpsContext) {
     // Check for IPv4 or IPv6. Otherwise don't track.
     let array_pos = match ctx.family() {
@@ -287,6 +293,7 @@ fn process_conn_established(ctx: SockOpsContext) {
 /// transitioned from `established` to something else.
 /// Removes the connection from the connection-tracker
 /// and substracts 1 from the connection counter.
+#[inline(always)]
 fn process_conn_state_change(ctx: SockOpsContext) {
     if ctx.arg(0) != BPF_TCP_ESTABLISHED || ctx.arg(1) == BPF_TCP_ESTABLISHED {
         return;
@@ -318,12 +325,95 @@ fn process_conn_state_change(ctx: SockOpsContext) {
     }
 }
 
-/// Returns the length of the datagram inside an IPv4 packet.
+/// Process an RTT update.
+///
+/// When the kernel updates de srtt of a connection,
+/// send the value to userspace.
+#[inline(always)]
+fn process_rtt_update(ctx: SockOpsContext) {
+    // Context has srtt stored 3 bits shifted left in microseconds.
+    let srtt = unsafe { (*ctx.ops).srtt_us >> 3 };
+
+    let conn_srtt = match ctx.family() {
+        AF_INET => ConnectionSRTT {
+            src_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.local_ip4().to_be())),
+            dst_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.remote_ip4().to_be())),
+            src_port: ctx.local_port() as u16,
+            dst_port: ctx.remote_port() as u16,
+            srtt,
+            addr_type: IP4_ADDR_TYPE,
+            _pad: [0; 3],
+        },
+        AF_INET6 => ConnectionSRTT {
+            src_addr: get_local_ip6(&ctx),
+            dst_addr: get_remote_ip6(&ctx),
+            src_port: ctx.local_port() as u16,
+            dst_port: ctx.remote_port() as u16,
+            srtt,
+            addr_type: IP6_ADDR_TYPE,
+            _pad: [0; 3],
+        },
+        _ => {
+            return;
+        }
+    };
+
+    SRTT_UPDATES.output(&ctx, conn_srtt, 0);
+}
+
+/// Return the length of the datagram inside an IPv4 packet.
 ///
 /// This is total length - header length (required fields + options).
+#[inline(always)]
 fn ip_datagram_len(ip4hdr: &Ipv4Hdr) -> u16 {
     ip4hdr.tot_len() - u16::from(ip4hdr.ihl())
 }
+
+/// Parse IPv6 address from 4 sets of 32 bits to the raw 16 bytes.
+#[inline(always)]
+fn ipv6_addr_bytes(addr: [u32; 4]) -> [u8; 16] {
+    array::from_fn(|i| {
+        addr[i / 4].to_ne_bytes()[i % 4]
+    })
+}
+
+/// Read local IPv6 address from sock_ops context.
+///
+/// Explicitly make it do 4 byte reads.
+/// Was running into a problem where it was doing 8 byte reads
+/// and the BPF verifier didn't like that.
+/// See https://hechao.li/posts/An-Invalid-bpf_context-Access-Bug/
+#[inline(always)]
+fn get_local_ip6(ctx: &SockOpsContext) -> [u8; 16] {
+    unsafe {
+        let p = core::ptr::addr_of!((*ctx.ops).local_ip6) as *const u32;
+        let addr = [
+            core::ptr::read_volatile(p),
+            core::ptr::read_volatile(p.add(1)),
+            core::ptr::read_volatile(p.add(2)),
+            core::ptr::read_volatile(p.add(3)),
+        ];
+        ipv6_addr_bytes(addr)
+    }
+}
+
+/// Read remote IPv6 address from sock_ops context.
+///
+/// Same as for local IPv6.
+#[inline(always)]
+fn get_remote_ip6(ctx: &SockOpsContext) -> [u8; 16] {
+    unsafe {
+        let p = core::ptr::addr_of!((*ctx.ops).remote_ip6) as *const u32;
+        let addr = [
+            core::ptr::read_volatile(p),
+            core::ptr::read_volatile(p.add(1)),
+            core::ptr::read_volatile(p.add(2)),
+            core::ptr::read_volatile(p.add(3)),
+        ];
+        ipv6_addr_bytes(addr)
+    }
+}
+
 
 #[cfg(not(test))]
 #[panic_handler]

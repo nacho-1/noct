@@ -4,6 +4,7 @@ mod utils;
 pub use models::{
     addr_type::AddrType,
     conn_count::ConnectionCount,
+    conn_srtt::ConnectionSRTT,
     packet_event::PacketEvent,
     protocol::IpProto
 };
