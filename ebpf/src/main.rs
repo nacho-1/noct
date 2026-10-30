@@ -265,20 +265,28 @@ fn process_conn_established(ctx: SockOpsContext) {
     let flags = (BPF_SOCK_OPS_RTT_CB_FLAG
         | BPF_SOCK_OPS_RETRANS_CB_FLAG
         | BPF_SOCK_OPS_STATE_CB_FLAG) as i32;
-    // SAFETY: External call to bpf helper.
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context.
+    // `bpf_sock_ops_cb_flags_set` is a valid helper for `sock_ops` contexts.
     let ret = unsafe { bpf_sock_ops_cb_flags_set(ctx.ops, flags) };
     if ret != 0 {
         error!(&ctx, "failed to set sock_ops flags: {}", ret);
     }
 
-    // SAFETY: External call to bpf helper.
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context,
+    // which is acceptable as the context pointer (`*mut c_void`)
+    // for `bpf_get_socket_cookie`.
     let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut _) };
 
     if ACTIVE_CONNS.insert(cookie, 1, BPF_NOEXIST as u64).is_ok() {
         if let Some(counter) = CONN_COUNT.get_ptr_mut(array_pos) {
             // From what I could find this is the main way of doing atomic addition
             // see aya/test/integration-ebpf/src/kprobe.rs.
-            // SAFETY: Value lives for the whole program.
+ 
+
+            // SAFETY: `get_ptr_mut` guarantees `counter` is non-null, aligned and
+            // valid map memory. The atomic intrinsic prevents data races across CPU cores.
             unsafe {
                 intrinsics::atomic_xadd::<u32, u32, {AtomicOrdering::Relaxed}>(
                     counter,
@@ -301,7 +309,10 @@ fn process_conn_state_change(ctx: SockOpsContext) {
         return;
     }
 
-    // SAFETY: External call to bpf helper.
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context,
+    // which is acceptable as the context pointer (`*mut c_void`)
+    // for `bpf_get_socket_cookie`.
     let cookie = unsafe { bpf_get_socket_cookie(ctx.ops as *mut _) };
 
     if ACTIVE_CONNS.remove(cookie).is_ok() {
@@ -316,7 +327,9 @@ fn process_conn_state_change(ctx: SockOpsContext) {
         if let Some(counter) = CONN_COUNT.get_ptr_mut(array_pos) {
             // Don't like this but it appears atomic_xsub
             // has no corresponding BPF operation for LLVM/bpf_linker or something.
-            // SAFETY: Value lives for the whole program.
+
+            // SAFETY: `get_ptr_mut` guarantees `counter` is non-null, aligned and
+            // valid map memory. The atomic intrinsic prevents data races across CPU cores.
             unsafe {
                 intrinsics::atomic_xadd::<u32, u32, {AtomicOrdering::Relaxed}>(
                     counter,
@@ -334,6 +347,9 @@ fn process_conn_state_change(ctx: SockOpsContext) {
 #[inline(always)]
 fn process_rtt_update(ctx: SockOpsContext) {
     // Context has srtt stored 3 bits shifted left in microseconds.
+
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context.
     let srtt = unsafe { (*ctx.ops).srtt_us >> 3 };
 
     let conn_srtt = match ctx.family() {
@@ -387,16 +403,23 @@ fn ipv6_addr_bytes(addr: [u32; 4]) -> [u8; 16] {
 /// See https://hechao.li/posts/An-Invalid-bpf_context-Access-Bug/
 #[inline(always)]
 fn get_local_ip6(ctx: &SockOpsContext) -> [u8; 16] {
-    unsafe {
-        let p = core::ptr::addr_of!((*ctx.ops).local_ip6) as *const u32;
-        let addr = [
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context.
+    let p = unsafe {
+        &raw const (*ctx.ops).local_ip6 as *const u32
+    };
+    // SAFETY: `p` points to the `local_ip6` field, which is a `[u32;4]` aligned to 4 bytes
+    // inside valid kernel context memory. Reading 4 contiguous `u32` elements
+    // stays strictly within bounds.
+    let addr = unsafe {
+        [
             core::ptr::read_volatile(p),
             core::ptr::read_volatile(p.add(1)),
             core::ptr::read_volatile(p.add(2)),
             core::ptr::read_volatile(p.add(3)),
-        ];
-        ipv6_addr_bytes(addr)
-    }
+        ]
+    };
+    ipv6_addr_bytes(addr)
 }
 
 /// Read remote IPv6 address from sock_ops context.
@@ -404,16 +427,23 @@ fn get_local_ip6(ctx: &SockOpsContext) -> [u8; 16] {
 /// Same as for local IPv6.
 #[inline(always)]
 fn get_remote_ip6(ctx: &SockOpsContext) -> [u8; 16] {
-    unsafe {
-        let p = core::ptr::addr_of!((*ctx.ops).remote_ip6) as *const u32;
-        let addr = [
+    // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
+    // provided by the kernel eBPF runtime for this execution context.
+    let p = unsafe {
+        &raw const (*ctx.ops).remote_ip6 as *const u32
+    };
+    // SAFETY: `p` points to the `remote_ip6` field, which is a `[u32;4]` aligned to 4 bytes
+    // inside valid kernel context memory. Reading 4 contiguous `u32` elements
+    // stays strictly within bounds.
+    let addr = unsafe {
+        [
             core::ptr::read_volatile(p),
             core::ptr::read_volatile(p.add(1)),
             core::ptr::read_volatile(p.add(2)),
             core::ptr::read_volatile(p.add(3)),
-        ];
-        ipv6_addr_bytes(addr)
-    }
+        ]
+    };
+    ipv6_addr_bytes(addr)
 }
 
 
