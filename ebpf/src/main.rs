@@ -135,7 +135,7 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
             return PASS_PKT;
         }
     };
-    match protocol {
+    let stats = match protocol {
         IpProto::Tcp => {
             let tcphdr = match ctx.load::<TcpHdr>(usize::from(ip4hdr.ihl())) {
                 Ok(ret) => ret,
@@ -144,7 +144,7 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
                     return PASS_PKT;
                 }
             };
-            let stats = PacketEvent {
+            PacketEvent {
                 src_addr: noct_common::encode_ip4_addr(ip4hdr.src_addr()),
                 dst_addr: noct_common::encode_ip4_addr(ip4hdr.dst_addr()),
                 src_port: u16::from_be_bytes(tcphdr.source),
@@ -154,8 +154,7 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
                 addr_type: noct_common::IP4_ADDR_TYPE,
                 protocol: u8::from(protocol),
                 _pad: [0; 2],
-            };
-            map.output(&ctx, &stats, 0);
+            }
         }
         IpProto::Udp => {
             let udphdr = match ctx.load::<UdpHdr>(usize::from(ip4hdr.ihl())) {
@@ -165,7 +164,7 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
                     return PASS_PKT;
                 }
             };
-            let stats = PacketEvent {
+            PacketEvent {
                 src_addr: noct_common::encode_ip4_addr(ip4hdr.src_addr()),
                 dst_addr: noct_common::encode_ip4_addr(ip4hdr.dst_addr()),
                 src_port: udphdr.src_port(),
@@ -175,12 +174,14 @@ fn process_skb_ip4(ctx: SkBuffContext, ip4hdr: Ipv4Hdr, map: &PerfEventArray<Pac
                 addr_type: noct_common::IP4_ADDR_TYPE,
                 protocol: u8::from(protocol),
                 _pad: [0; 2],
-            };
-            map.output(&ctx, &stats, 0);
+            }
         }
-        _ => {}
-    }
+        _ => {
+            return PASS_PKT;
+        }
+    };
 
+    map.output(&ctx, stats, 0);
     PASS_PKT
 }
 
@@ -194,7 +195,7 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
             return PASS_PKT;
         }
     };
-    match protocol {
+    let stats = match protocol {
         IpProto::Tcp => {
             let tcphdr = match ctx.load::<TcpHdr>(Ipv6Hdr::LEN) {
                 Ok(ret) => ret,
@@ -203,7 +204,7 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
                     return PASS_PKT;
                 }
             };
-            let stats = PacketEvent {
+            PacketEvent {
                 src_addr: ip6hdr.src_addr().to_bits().to_be_bytes(),
                 dst_addr: ip6hdr.dst_addr().to_bits().to_be_bytes(),
                 src_port: u16::from_be_bytes(tcphdr.source),
@@ -213,8 +214,7 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
                 addr_type: noct_common::IP6_ADDR_TYPE,
                 protocol: u8::from(protocol),
                 _pad: [0; 2],
-            };
-            map.output(&ctx, &stats, 0);
+            }
         }
         IpProto::Udp => {
             let udphdr = match ctx.load::<UdpHdr>(Ipv6Hdr::LEN) {
@@ -224,7 +224,7 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
                     return PASS_PKT;
                 }
             };
-            let stats = PacketEvent {
+            PacketEvent {
                 src_addr: ip6hdr.src_addr().to_bits().to_be_bytes(),
                 dst_addr: ip6hdr.dst_addr().to_bits().to_be_bytes(),
                 src_port: udphdr.src_port(),
@@ -234,12 +234,14 @@ fn process_skb_ip6(ctx: SkBuffContext, ip6hdr: Ipv6Hdr, map: &PerfEventArray<Pac
                 addr_type: noct_common::IP6_ADDR_TYPE,
                 protocol: u8::from(protocol),
                 _pad: [0; 2],
-            };
-            map.output(&ctx, &stats, 0);
+            }
         }
-        _ => {}
-    }
+        _ => {
+            return PASS_PKT;
+        }
+    };
 
+    map.output(&ctx, stats, 0);
     PASS_PKT
 }
 
