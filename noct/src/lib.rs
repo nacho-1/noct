@@ -1,9 +1,9 @@
 use anyhow::Context;
 use aya::{Ebpf, maps::{Array, PerfEventArray}};
+use futures::{StreamExt, stream::FuturesUnordered};
 use noct_config::Config;
 use tokio::{
-    signal::{self, unix::SignalKind},
-    sync::{broadcast, mpsc},
+    signal::{self, unix::SignalKind}, sync::{broadcast, mpsc}, task::JoinHandle,
 };
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -69,13 +69,18 @@ pub async fn run() -> anyhow::Result<()> {
     // Channel used for graceful shutdown of the different tasks of the application.
     let (shutdown_tx, _) = broadcast::channel(1);
 
+    // Vector for all the tasks of the application.
+    // Later used for cleanup on close.
+    let mut tasks = FuturesUnordered::new();
+
     // Start spawning the different tasks of the application.
 
-    let ebpf_logger = match ebpf_helpers::init_ebpf_logger(&mut ebpf, shutdown_tx.subscribe()) {
-        Ok(handler) => Some(handler),
+    match ebpf_helpers::init_ebpf_logger(&mut ebpf, shutdown_tx.subscribe()) {
+        Ok(handle) => {
+            tasks.push(join_task(handle, "eBPF logger"));
+        }
         Err(e) => {
             tracing::warn!("failed to initialize eBPF logger: {e}");
-            None
         }
     };
 
@@ -87,29 +92,58 @@ pub async fn run() -> anyhow::Result<()> {
     let (srtt_updates_tx, mut srtt_updates_rx) = mpsc::unbounded_channel();
     let (retrans_tx, mut retrans_rx) = mpsc::unbounded_channel();
     let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
-    let ingress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
-        ingress_stats_map,
-        ingress_stats_tx,
-        shutdown_tx.subscribe(),
-    )?;
-    let egress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
-        egress_stats_map,
-        egress_stats_tx,
-        shutdown_tx.subscribe(),
-    )?;
-    let srtt_readers = read_event_array::<noct_common::ConnectionSRTT, noct_db::ConnectionSRTT>(
-        srtt_updates_map,
-        srtt_updates_tx,
-        shutdown_tx.subscribe(),
-    )?;
-    let retrans_readers = read_event_array::<noct_common::ConnectionRetrans, noct_db::ConnectionRetrans>(
-        retransmissions_map,
-        retrans_tx,
-        shutdown_tx.subscribe(),
-    )?;
-    let conn_count_watcher = tokio::spawn(
-        watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
+    tasks.extend(
+        read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+            ingress_stats_map,
+            ingress_stats_tx,
+            shutdown_tx.subscribe(),
+        )?
+            .into_iter()
+            .map(|handle| join_task(handle, "ingress traffic reader"))
     );
+    tasks.extend(
+        read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+            egress_stats_map,
+            egress_stats_tx,
+            shutdown_tx.subscribe(),
+        )?
+            .into_iter()
+            .map(|handle| join_task(handle, "egress traffic reader"))
+    );
+    tasks.extend(
+        read_event_array::<noct_common::ConnectionSRTT, noct_db::ConnectionSRTT>(
+            srtt_updates_map,
+            srtt_updates_tx,
+            shutdown_tx.subscribe(),
+        )?
+            .into_iter()
+            .map(|handle| join_task(handle, "srtt reader"))
+    );
+    tasks.extend(
+        read_event_array::<noct_common::ConnectionRetrans, noct_db::ConnectionRetrans>(
+            retransmissions_map,
+            retrans_tx,
+            shutdown_tx.subscribe(),
+        )?
+            .into_iter()
+            .map(|handle| join_task(handle, "retransmissions reader"))
+    );
+    tasks.push(join_task(
+        tokio::spawn(
+            watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
+        ),
+        "connection count watcher"
+    ));
+    tasks.push(join_task(
+        tokio::spawn(noct_web::run(
+            config.server,
+            ingress_stats_rx,
+            egress_stats_rx,
+            conn_count_rx,
+            shutdown_tx.subscribe(),
+        )),
+        "web server"
+    ));
     tokio::spawn(async move {
         while let Some(msg) = srtt_updates_rx.recv().await {
             tracing::debug!("srtt update: {:?}", msg.event);
@@ -121,103 +155,11 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let server = tokio::spawn(noct_web::run(
-        config.server,
-        ingress_stats_rx,
-        egress_stats_rx,
-        conn_count_rx,
-        shutdown_tx.subscribe(),
-    ));
-
     // Wait for application shutdown.
     shutdown_handler(shutdown_tx).await;
 
-    // Perform shutdown cleanups.
-    // TODO: Refactor
-
-    if let Some(handler) = ebpf_logger {
-        match handler.await {
-            Ok(res) => {
-                if let Err(e) = res {
-                    tracing::error!("eBPF logger error: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::error!("failed to join eBPF logger: {e}");
-            }
-        }
-    }
-
-    tracing::info!("shutting down eBPF event readers...");
-    for handler in ingress_readers {
-        match handler.await {
-            Ok(res) => {
-                if let Err(e) = res {
-                    tracing::error!("ingress stats reader error: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::error!("failed to join ingress stats reader: {e}");
-            }
-        }
-    }
-    for handler in egress_readers {
-        match handler.await {
-            Ok(res) => {
-                if let Err(e) = res {
-                    tracing::error!("egress stats reader error: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::error!("failed to join egress stats reader: {e}");
-            }
-        }
-    }
-    for handler in srtt_readers {
-        match handler.await {
-            Ok(res) => {
-                if let Err(e) = res {
-                    tracing::error!("srtt updates reader error: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::error!("failed to join srtt updates reader: {e}");
-            }
-        }
-    }
-    for handler in retrans_readers {
-        match handler.await {
-            Ok(res) => {
-                if let Err(e) = res {
-                    tracing::error!("retransmissions reader error: {e}");
-                }
-            }
-            Err(e) => {
-                tracing::error!("failed to join retransmissions reader: {e}");
-            }
-        }
-    }
-    match conn_count_watcher.await {
-        Ok(res) => {
-            if let Err(e) = res {
-                tracing::error!("connection count watcher error: {e}");
-            }
-        }
-        Err(e) => {
-            tracing::error!("failed to join connection count watcher: {e}");
-        }
-    }
-
-    match server.await {
-        Ok(handle) => {
-            if let Err(e) = handle {
-                tracing::error!("server error: {e}");
-            }
-        }
-        Err(e) => {
-            tracing::error!("failed to join server: {e}");
-        }
-    }
+    // Await all tasks.
+    while tasks.next().await.is_some() {}
 
     tracing::info!("shutdown successful");
     Ok(())
@@ -247,4 +189,17 @@ async fn shutdown_handler(shutdown_tx: broadcast::Sender<()>) {
 
     tracing::info!("shutdown signal received");
     let _ = shutdown_tx.send(());
+}
+
+async fn join_task(handle: JoinHandle<anyhow::Result<()>>, name: &str) {
+    match handle.await {
+        Ok(res) => {
+            if let Err(e) = res {
+                tracing::error!("{} error: {}", name, e);
+            }
+        }
+        Err(e) => {
+            tracing::error!("failed to join {}: {}", name, e);
+        }
+    }
 }

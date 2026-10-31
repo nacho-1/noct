@@ -32,6 +32,7 @@ clap = { version = "4.5.20", default-features = false, features = ["std"] }
 dotenvy = { version = "0.15", default-features = false }
 etherparse = { version = "0.21", default-features = false }
 figment = { version = "0.10", default-features = false }
+futures = { version = "0.3", default-features = false }
 hyper = { version = "1.11", default-features = false }
 libc = { version = "0.2.159", default-features = false }
 log = { version = "0.4.22", default-features = false }
