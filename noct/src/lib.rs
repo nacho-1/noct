@@ -60,6 +60,7 @@ pub async fn run() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let srtt_updates_map = PerfEventArray::try_from(ebpf.take_map("SRTT_UPDATES").unwrap())?;
+    let retransmissions_map = PerfEventArray::try_from(ebpf.take_map("RETRANSMISSIONS").unwrap())?;
     let conn_counter: Array<_, u32> = Array::try_from(ebpf.take_map("CONN_COUNT").unwrap())?;
 
     // Load the eBPF programs into the kernel at this point.
@@ -84,6 +85,7 @@ pub async fn run() -> anyhow::Result<()> {
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
     let (srtt_updates_tx, mut srtt_updates_rx) = mpsc::unbounded_channel();
+    let (retrans_tx, mut retrans_rx) = mpsc::unbounded_channel();
     let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
     let ingress_readers = read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
         ingress_stats_map,
@@ -100,12 +102,22 @@ pub async fn run() -> anyhow::Result<()> {
         srtt_updates_tx,
         shutdown_tx.subscribe(),
     )?;
+    let retrans_readers = read_event_array::<noct_common::ConnectionRetrans, noct_db::ConnectionRetrans>(
+        retransmissions_map,
+        retrans_tx,
+        shutdown_tx.subscribe(),
+    )?;
     let conn_count_watcher = tokio::spawn(
         watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
     );
     tokio::spawn(async move {
         while let Some(msg) = srtt_updates_rx.recv().await {
             tracing::debug!("srtt update: {:?}", msg.event);
+        }
+    });
+    tokio::spawn(async move {
+        while let Some(msg) = retrans_rx.recv().await {
+            tracing::debug!("retransmission: {:?}", msg.event);
         }
     });
 
@@ -170,6 +182,18 @@ pub async fn run() -> anyhow::Result<()> {
             }
             Err(e) => {
                 tracing::error!("failed to join srtt updates reader: {e}");
+            }
+        }
+    }
+    for handler in retrans_readers {
+        match handler.await {
+            Ok(res) => {
+                if let Err(e) = res {
+                    tracing::error!("retransmissions reader error: {e}");
+                }
+            }
+            Err(e) => {
+                tracing::error!("failed to join retransmissions reader: {e}");
             }
         }
     }

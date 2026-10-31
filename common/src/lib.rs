@@ -86,6 +86,35 @@ const _: () = assert!(
     "ConnectionRTT isn't properly aligned!"
 );
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ConnectionRetrans {
+    /// Source IP address.
+    pub src_addr: [u8; 16],
+    /// Destination IP address.
+    pub dst_addr: [u8; 16],
+    /// Source port. Host endianness.
+    pub src_port: u16,
+    /// Destination port. Host endianness.
+    pub dst_port: u16,
+    /// Number of segments retransmitted.
+    pub segments: u32,
+    /// Address family. 0 = IPv4, 1 = IPv6
+    pub addr_type: u8,
+    /// Padding for alignment.
+    pub _pad: [u8; 3],
+}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for ConnectionRetrans {}
+
+/// Same thing as for [PacketEvent].
+const _: () = assert!(
+    core::mem::size_of::<ConnectionRetrans>() % 8 == 4,
+    "ConnectionRetrans isn't properly aligned!"
+);
+
+
 /// Encodes IPv4 address as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`.
 #[inline(always)]
 pub fn encode_ip4_addr(addr: Ipv4Addr) -> [u8; 16] {

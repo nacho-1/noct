@@ -24,7 +24,7 @@ use network_types::{
     tcp::TcpHdr,
     udp::UdpHdr,
 };
-use noct_common::{ConnectionSRTT, IP4_ADDR_TYPE, IP4_CONN_POS, IP6_ADDR_TYPE, IP6_CONN_POS, PacketEvent};
+use noct_common::{ConnectionRetrans, ConnectionSRTT, IP4_ADDR_TYPE, IP4_CONN_POS, IP6_ADDR_TYPE, IP6_CONN_POS, PacketEvent};
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
@@ -46,6 +46,10 @@ static TX_STATS: PerfEventArray<PacketEvent> = PerfEventArray::new(0);
 /// Array for transmitting connection SRTT values.
 #[map]
 static SRTT_UPDATES: PerfEventArray<ConnectionSRTT> = PerfEventArray::new(0);
+
+/// Array for transmitting connection TCP retransmissions.
+#[map]
+static RETRANSMISSIONS: PerfEventArray<ConnectionRetrans> = PerfEventArray::new(0);
 
 /// Map for tracking active connections.
 ///
@@ -357,7 +361,7 @@ fn process_rtt_update(ctx: SockOpsContext) {
             src_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.local_ip4().to_be())),
             dst_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.remote_ip4().to_be())),
             src_port: ctx.local_port() as u16,
-            dst_port: ctx.remote_port() as u16,
+            dst_port: u32::from_be(ctx.remote_port()) as u16,
             srtt,
             addr_type: IP4_ADDR_TYPE,
             _pad: [0; 3],
@@ -366,7 +370,7 @@ fn process_rtt_update(ctx: SockOpsContext) {
             src_addr: get_local_ip6(&ctx),
             dst_addr: get_remote_ip6(&ctx),
             src_port: ctx.local_port() as u16,
-            dst_port: ctx.remote_port() as u16,
+            dst_port: u32::from_be(ctx.remote_port()) as u16,
             srtt,
             addr_type: IP6_ADDR_TYPE,
             _pad: [0; 3],
@@ -377,6 +381,40 @@ fn process_rtt_update(ctx: SockOpsContext) {
     };
 
     SRTT_UPDATES.output(&ctx, conn_srtt, 0);
+}
+
+#[inline(always)]
+fn process_retransmission(ctx: SockOpsContext) {
+    // Only process if retransmission was successful.
+    if ctx.arg(2) != 0 {
+        return;
+    }
+
+    let retrans = match ctx.family() {
+        AF_INET => ConnectionRetrans {
+            src_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.local_ip4().to_be())),
+            dst_addr: noct_common::encode_ip4_addr(Ipv4Addr::from_bits(ctx.remote_ip4().to_be())),
+            src_port: ctx.local_port() as u16,
+            dst_port: u32::from_be(ctx.remote_port()) as u16,
+            segments: ctx.arg(1),
+            addr_type: IP4_ADDR_TYPE,
+            _pad: [0; 3],
+        },
+        AF_INET6 => ConnectionRetrans {
+            src_addr: get_local_ip6(&ctx),
+            dst_addr: get_remote_ip6(&ctx),
+            src_port: ctx.local_port() as u16,
+            dst_port: u32::from_be(ctx.remote_port()) as u16,
+            segments: ctx.arg(1),
+            addr_type: IP6_ADDR_TYPE,
+            _pad: [0; 3],
+        },
+        _ => {
+            return;
+        }
+    };
+
+    RETRANSMISSIONS.output(&ctx, retrans, 0);
 }
 
 /// Return the length of the datagram inside an IPv4 packet.
