@@ -6,10 +6,15 @@ use crate::utils;
 #[derive(Debug)]
 #[cfg_attr(feature = "test-helpers", derive(Clone))]
 pub struct ConnectionSRTT {
+    /// Source IP address.
     pub src_addr: IpAddr,
+    /// Destination IP address.
     pub dst_addr: IpAddr,
+    /// Source port. Host endianness.
     pub src_port: u16,
+    /// Destination port. Host endianness.
     pub dst_port: u16,
+    /// Updated smooth round-time-trip.
     pub srtt: u32,
 }
 

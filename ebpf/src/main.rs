@@ -383,6 +383,7 @@ fn process_rtt_update(ctx: SockOpsContext) {
     SRTT_UPDATES.output(&ctx, conn_srtt, 0);
 }
 
+/// Process connection TCP retransmissions.
 #[inline(always)]
 fn process_retransmission(ctx: SockOpsContext) {
     // Only process if retransmission was successful.

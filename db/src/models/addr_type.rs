@@ -1,5 +1,6 @@
 use core::fmt;
 
+/// IP address type.
 #[cfg_attr(feature = "test-helpers", derive(Clone))]
 pub enum AddrType {
     IPv4,

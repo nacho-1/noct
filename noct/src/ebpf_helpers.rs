@@ -163,7 +163,7 @@ pub async fn watch_conn_count(
                 ] {
                     let count = array.get(&pos, 0)?;
                     if let Err(_) = sender.send(EventMsg::new(
-                        noct_db::ConnectionCount { addr_type, count }
+                        ConnectionCount { addr_type, count }
                     )) {
                         return Ok(());
                     }
