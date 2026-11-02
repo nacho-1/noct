@@ -10,3 +10,15 @@ pub mod conn_srtt;
 pub mod packet_event;
 /// Contains entities for working with L4 protocols.
 pub mod protocol;
+/// Contains utilities for working with the different models of the app.
+mod utils;
+
+pub use {
+    addr_type::AddrType,
+    conn_count::ConnectionCount,
+    conn_retrans::ConnectionRetrans,
+    conn_srtt::ConnectionSRTT,
+    packet_event::PacketEvent,
+    protocol::IpProto
+};
+pub use utils::event_msg::EventMsg;

@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "noct",
     "common",
-    "ebpf",
-    "web",
     "config",
+    "ebpf",
     "macros",
-    "db",
+    "models",
+    "noct",
+    "web",
 ]
 default-members = ["noct", "common"]
 

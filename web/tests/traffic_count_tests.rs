@@ -4,7 +4,7 @@ use std::{
 };
 
 use hyper::StatusCode;
-use noct_db::{IpProto, PacketEvent};
+use noct_models::{IpProto, PacketEvent};
 use noct_web::test_helpers::{BodyExt, RouterExt, TestContext};
 
 use crate::common::{TEMPLATE_PACKET_EVENT, send_event};

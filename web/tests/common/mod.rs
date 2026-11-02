@@ -1,6 +1,6 @@
 use std::net::{IpAddr, Ipv4Addr};
 
-use noct_db::{EventMsg, IpProto, PacketEvent};
+use noct_models::{EventMsg, IpProto, PacketEvent};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
 /// Template simple packet event.

@@ -93,7 +93,7 @@ pub async fn run() -> anyhow::Result<()> {
     let (retrans_tx, mut retrans_rx) = mpsc::unbounded_channel();
     let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
     tasks.extend(
-        read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
             ingress_stats_map,
             ingress_stats_tx,
             shutdown_tx.subscribe(),
@@ -102,7 +102,7 @@ pub async fn run() -> anyhow::Result<()> {
             .map(|handle| join_task(handle, "ingress traffic reader"))
     );
     tasks.extend(
-        read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+        read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
             egress_stats_map,
             egress_stats_tx,
             shutdown_tx.subscribe(),
@@ -111,7 +111,7 @@ pub async fn run() -> anyhow::Result<()> {
             .map(|handle| join_task(handle, "egress traffic reader"))
     );
     tasks.extend(
-        read_event_array::<noct_common::ConnectionSRTT, noct_db::ConnectionSRTT>(
+        read_event_array::<noct_common::ConnectionSRTT, noct_models::ConnectionSRTT>(
             srtt_updates_map,
             srtt_updates_tx,
             shutdown_tx.subscribe(),
@@ -120,7 +120,7 @@ pub async fn run() -> anyhow::Result<()> {
             .map(|handle| join_task(handle, "srtt reader"))
     );
     tasks.extend(
-        read_event_array::<noct_common::ConnectionRetrans, noct_db::ConnectionRetrans>(
+        read_event_array::<noct_common::ConnectionRetrans, noct_models::ConnectionRetrans>(
             retransmissions_map,
             retrans_tx,
             shutdown_tx.subscribe(),

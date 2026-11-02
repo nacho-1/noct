@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 use hyper::{HeaderMap, Method};
-use noct_db::{ConnectionCount, EventMsg, PacketEvent};
+use noct_models::{ConnectionCount, EventMsg, PacketEvent};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tower::ServiceExt;
 

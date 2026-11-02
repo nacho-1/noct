@@ -1,5 +1,5 @@
 use noct_config::ServerConfig;
-use noct_db::{ConnectionCount, EventMsg, PacketEvent};
+use noct_models::{ConnectionCount, EventMsg, PacketEvent};
 use tokio::{
     net::TcpListener,
     sync::{broadcast, mpsc::UnboundedReceiver},

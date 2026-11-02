@@ -11,7 +11,7 @@ use aya::{
 };
 use aya_log::EbpfLogger;
 use noct_common::{IP4_CONN_POS, IP6_CONN_POS};
-use noct_db::{AddrType, ConnectionCount, EventMsg};
+use noct_models::{AddrType, ConnectionCount, EventMsg};
 use tokio::{
     io::{
         Interest,

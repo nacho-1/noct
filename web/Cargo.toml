@@ -10,7 +10,7 @@ test-helpers = ["dep:noct-macros", "dep:hyper", "dep:tower"]
 
 [dependencies]
 noct-config = { path = "../config" }
-noct-db = { path = "../db" }
+noct-models = { path = "../models" }
 
 anyhow = { workspace = true }
 axum = { workspace = true, default-features = true, features = ["macros"] }
@@ -28,5 +28,5 @@ hyper = { workspace = true, features = ["full"], optional = true }
 tower = { workspace = true, features = ["full"], optional = true }
 
 [dev-dependencies]
-noct-db = { path = "../db", features = ["test-helpers"] }
+noct-models = { path = "../models", features = ["test-helpers"] }
 noct-web = { path = ".", features = ["test-helpers"] }

@@ -1093,8 +1093,8 @@ dependencies = [
  "noct",
  "noct-common",
  "noct-config",
- "noct-db",
  "noct-ebpf",
+ "noct-models",
  "noct-web",
  "tokio",
  "tracing",
@@ -1122,15 +1122,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "noct-db"
-version = "0.1.0"
-dependencies = [
- "noct-common",
- "noct-db",
- "tokio",
-]
-
-[[package]]
 name = "noct-ebpf"
 version = "0.1.0"
 dependencies = [
@@ -1150,6 +1141,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "noct-models"
+version = "0.1.0"
+dependencies = [
+ "noct-common",
+ "noct-models",
+ "tokio",
+]
+
+[[package]]
 name = "noct-web"
 version = "0.1.0"
 dependencies = [
@@ -1157,8 +1157,8 @@ dependencies = [
  "axum",
  "hyper",
  "noct-config",
- "noct-db",
  "noct-macros",
+ "noct-models",
  "noct-web",
  "problemdetails",
  "prometheus",

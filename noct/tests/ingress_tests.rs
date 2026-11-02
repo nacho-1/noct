@@ -5,7 +5,7 @@ use std::{
 
 use aya::{Ebpf, TestRun, TestRunOptions, maps::PerfEventArray, programs::CgroupSkb};
 use etherparse::{Ethernet2Header, PacketBuilder, PacketBuilderStep};
-use noct_db::IpProto;
+use noct_models::IpProto;
 use tokio::sync::{broadcast, mpsc};
 
 fn build_l2_packet() -> PacketBuilderStep<Ethernet2Header> {
@@ -28,7 +28,7 @@ async fn test_graceful_shutdown() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, _) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -58,7 +58,7 @@ async fn test_single_packet_udp_no_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -126,7 +126,7 @@ async fn test_single_packet_udp_with_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -196,7 +196,7 @@ async fn test_single_packet_tcp_no_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -265,7 +265,7 @@ async fn test_single_packet_tcp_with_payload() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -335,7 +335,7 @@ async fn test_single_packet_ip6_udp() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),
@@ -405,7 +405,7 @@ async fn test_single_packet_ip6_tcp() -> anyhow::Result<()> {
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let (shutdown_tx, _) = broadcast::channel(1);
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_db::PacketEvent>(
+    let handles = noct::read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
         ingress_stats_map,
         tx,
         shutdown_tx.subscribe(),

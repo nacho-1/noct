@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use noct_db::{ConnectionCount, EventMsg, IpProto, PacketEvent};
+use noct_models::{ConnectionCount, EventMsg, IpProto, PacketEvent};
 use prometheus::{IntCounterVec, IntGaugeVec, Opts, Registry, proto::MetricFamily};
 use tokio::sync::mpsc::UnboundedReceiver;
 
