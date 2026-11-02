@@ -17,7 +17,7 @@ use aya_ebpf::{
     maps::{Array, HashMap, PerfEventArray},
     programs::{SkBuffContext, SockOpsContext},
 };
-use aya_log_ebpf::{debug, error};
+use aya_log_ebpf::{error};
 use network_types::{
     eth::EtherType,
     ip::{IpError, IpProto, Ipv4Hdr, Ipv6Hdr},
@@ -87,7 +87,7 @@ pub fn socket_ops(ctx: SockOpsContext) -> u32 {
             process_rtt_update(ctx);
         }
         BPF_SOCK_OPS_RETRANS_CB => {
-            debug!(&ctx, "retransmission");
+            process_retransmission(ctx);
         }
         BPF_SOCK_OPS_STATE_CB => {
             process_conn_state_change(ctx);
