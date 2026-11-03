@@ -41,12 +41,12 @@ Distinct parts of the project are separated into separate crates:
 
 ```
 .
-├── noct   // Entry-point of the app as well as eBPF related logic
-├── ebpf   // The eBPF programs to be loaded in the kernel
 ├── common // Structures in common between userspace and the eBPF programs
 ├── config // Defines the `Config` struct and handles building the configuration from environment-specific TOML files and environment variables
-├── db     // Encapsulates entity definitions and related code
+├── ebpf   // The eBPF programs to be loaded in the kernel
 ├── macros // Contains macros for application tests
+├── models // Encapsulates entity definitions and related code
+├── noct   // Entry-point of the app as well as eBPF related logic
 └── web    // The web interface as well as tests for it
 ```
 
