@@ -57,6 +57,7 @@ pub async fn run() -> anyhow::Result<()> {
     )))?;
 
     // Get the maps for communication with kernel.
+    // TODO: Remove unwraps and use anyhow context.
     let ingress_stats_map = PerfEventArray::try_from(ebpf.take_map("RX_STATS").unwrap())?;
     let egress_stats_map = PerfEventArray::try_from(ebpf.take_map("TX_STATS").unwrap())?;
     let srtt_updates_map = PerfEventArray::try_from(ebpf.take_map("SRTT_UPDATES").unwrap())?;
@@ -67,6 +68,7 @@ pub async fn run() -> anyhow::Result<()> {
     ebpf_helpers::init_ebpf(&mut ebpf, config.cgroup_path)?;
 
     // Channel used for graceful shutdown of the different tasks of the application.
+    // TODO: Maybe refactor to use [tokio_util::CancellationToken]s instead.
     let (shutdown_tx, _) = broadcast::channel(1);
 
     // Vector for all the tasks of the application.
@@ -156,6 +158,8 @@ pub async fn run() -> anyhow::Result<()> {
     });
 
     // Wait for application shutdown.
+    // TODO: Do a [tokio::select!] between this and [tasks.next()]
+    // in case a tasks fails mid execution.
     shutdown_handler(shutdown_tx).await;
 
     // Await all tasks.
