@@ -91,8 +91,8 @@ pub async fn run() -> anyhow::Result<()> {
     // in userspace.
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
-    let (srtt_updates_tx, mut srtt_updates_rx) = mpsc::unbounded_channel();
-    let (retrans_tx, mut retrans_rx) = mpsc::unbounded_channel();
+    let (srtt_updates_tx, srtt_updates_rx) = mpsc::unbounded_channel();
+    let (retrans_tx, retrans_rx) = mpsc::unbounded_channel();
     let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
     tasks.extend(
         read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
@@ -146,16 +146,20 @@ pub async fn run() -> anyhow::Result<()> {
         )),
         "web server"
     ));
-    tokio::spawn(async move {
-        while let Some(msg) = srtt_updates_rx.recv().await {
-            tracing::debug!("srtt update: {:?}", msg.event);
-        }
-    });
-    tokio::spawn(async move {
-        while let Some(msg) = retrans_rx.recv().await {
-            tracing::debug!("retransmission: {:?}", msg.event);
-        }
-    });
+    tasks.push(join_task(
+        tokio::spawn(noct_db::batcher(
+            srtt_updates_rx,
+            noct_db::log_batch::<noct_db::rows::conn_srtt::ConnectionSRTT>,
+        )),
+        "srtt event batcher"
+    ));
+    tasks.push(join_task(
+        tokio::spawn(noct_db::batcher(
+            retrans_rx,
+            noct_db::log_batch::<noct_db::rows::conn_retrans::ConnectionRetrans>,
+        )),
+        "srtt event batcher"
+    ));
 
     // Wait for application shutdown.
     // TODO: Do a [tokio::select!] between this and [tasks.next()]
@@ -207,3 +211,4 @@ async fn join_task(handle: JoinHandle<anyhow::Result<()>>, name: &str) {
         }
     }
 }
+

@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "common",
-    "config",
+    "config", "db",
     "ebpf",
     "macros",
     "models",

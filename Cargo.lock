@@ -1093,6 +1093,7 @@ dependencies = [
  "noct",
  "noct-common",
  "noct-config",
+ "noct-db",
  "noct-ebpf",
  "noct-models",
  "noct-web",
@@ -1118,6 +1119,16 @@ dependencies = [
  "dotenvy",
  "figment",
  "serde",
+ "tracing",
+]
+
+[[package]]
+name = "noct-db"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "noct-models",
+ "tokio",
  "tracing",
 ]
 
