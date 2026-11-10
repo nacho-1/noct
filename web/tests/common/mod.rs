@@ -24,4 +24,3 @@ pub async fn send_event<T>(event: T, tx: &UnboundedSender<EventMsg<T>>) {
     tx.send(msg).unwrap();
     ack_tx.await.expect("must receive ACK");
 }
-

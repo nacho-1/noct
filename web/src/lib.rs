@@ -28,11 +28,7 @@ pub async fn run(
     conn_count_rx: UnboundedReceiver<EventMsg<ConnectionCount>>,
     mut shutdown: broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
-    let app_state = state::init_app_state(
-        ingress_stats_rx,
-        egress_stats_rx,
-        conn_count_rx
-    ).await?;
+    let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx, conn_count_rx).await?;
     let app = routes::init_routes(app_state);
 
     let addr = config.addr();

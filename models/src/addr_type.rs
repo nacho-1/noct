@@ -33,5 +33,4 @@ mod tests {
 
         assert_eq!(&addr.to_string(), "IPv6");
     }
-
 }

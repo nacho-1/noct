@@ -3,7 +3,11 @@
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
 
-use core::{array, intrinsics::{self, AtomicOrdering}, net::Ipv4Addr};
+use core::{
+    array,
+    intrinsics::{self, AtomicOrdering},
+    net::Ipv4Addr,
+};
 
 use aya_ebpf::{
     bindings::{
@@ -17,14 +21,17 @@ use aya_ebpf::{
     maps::{Array, HashMap, PerfEventArray},
     programs::{SkBuffContext, SockOpsContext},
 };
-use aya_log_ebpf::{error};
+use aya_log_ebpf::error;
 use network_types::{
     eth::EtherType,
     ip::{IpError, IpProto, Ipv4Hdr, Ipv6Hdr},
     tcp::TcpHdr,
     udp::UdpHdr,
 };
-use noct_common::{ConnectionRetrans, ConnectionSRTT, IP4_ADDR_TYPE, IP4_CONN_POS, IP6_ADDR_TYPE, IP6_CONN_POS, PacketEvent};
+use noct_common::{
+    ConnectionRetrans, ConnectionSRTT, IP4_ADDR_TYPE, IP4_CONN_POS, IP6_ADDR_TYPE, IP6_CONN_POS,
+    PacketEvent,
+};
 
 /// Return value to let package pass.
 const PASS_PKT: i32 = 1;
@@ -287,15 +294,11 @@ fn process_conn_established(ctx: SockOpsContext) {
         if let Some(counter) = CONN_COUNT.get_ptr_mut(array_pos) {
             // From what I could find this is the main way of doing atomic addition
             // see aya/test/integration-ebpf/src/kprobe.rs.
- 
 
             // SAFETY: `get_ptr_mut` guarantees `counter` is non-null, aligned and
             // valid map memory. The atomic intrinsic prevents data races across CPU cores.
             unsafe {
-                intrinsics::atomic_xadd::<u32, u32, {AtomicOrdering::Relaxed}>(
-                    counter,
-                    1
-                );
+                intrinsics::atomic_xadd::<u32, u32, { AtomicOrdering::Relaxed }>(counter, 1);
             }
         }
     }
@@ -335,10 +338,7 @@ fn process_conn_state_change(ctx: SockOpsContext) {
             // SAFETY: `get_ptr_mut` guarantees `counter` is non-null, aligned and
             // valid map memory. The atomic intrinsic prevents data races across CPU cores.
             unsafe {
-                intrinsics::atomic_xadd::<u32, u32, {AtomicOrdering::Relaxed}>(
-                    counter,
-                    u32::MAX
-                );
+                intrinsics::atomic_xadd::<u32, u32, { AtomicOrdering::Relaxed }>(counter, u32::MAX);
             }
         }
     }
@@ -429,9 +429,7 @@ fn ip_datagram_len(ip4hdr: &Ipv4Hdr) -> u16 {
 /// Parse IPv6 address from 4 sets of 32 bits to the raw 16 bytes.
 #[inline(always)]
 fn ipv6_addr_bytes(addr: [u32; 4]) -> [u8; 16] {
-    array::from_fn(|i| {
-        addr[i / 4].to_ne_bytes()[i % 4]
-    })
+    array::from_fn(|i| addr[i / 4].to_ne_bytes()[i % 4])
 }
 
 /// Read local IPv6 address from sock_ops context.
@@ -444,9 +442,7 @@ fn ipv6_addr_bytes(addr: [u32; 4]) -> [u8; 16] {
 fn get_local_ip6(ctx: &SockOpsContext) -> [u8; 16] {
     // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
     // provided by the kernel eBPF runtime for this execution context.
-    let p = unsafe {
-        &raw const (*ctx.ops).local_ip6 as *const u32
-    };
+    let p = unsafe { &raw const (*ctx.ops).local_ip6 as *const u32 };
     // SAFETY: `p` points to the `local_ip6` field, which is a `[u32;4]` aligned to 4 bytes
     // inside valid kernel context memory. Reading 4 contiguous `u32` elements
     // stays strictly within bounds.
@@ -468,9 +464,7 @@ fn get_local_ip6(ctx: &SockOpsContext) -> [u8; 16] {
 fn get_remote_ip6(ctx: &SockOpsContext) -> [u8; 16] {
     // SAFETY: `ctx.ops` is a valid, non-null pointer to `bpf_sock_ops` structure
     // provided by the kernel eBPF runtime for this execution context.
-    let p = unsafe {
-        &raw const (*ctx.ops).remote_ip6 as *const u32
-    };
+    let p = unsafe { &raw const (*ctx.ops).remote_ip6 as *const u32 };
     // SAFETY: `p` points to the `remote_ip6` field, which is a `[u32;4]` aligned to 4 bytes
     // inside valid kernel context memory. Reading 4 contiguous `u32` elements
     // stays strictly within bounds.
@@ -484,7 +478,6 @@ fn get_remote_ip6(ctx: &SockOpsContext) -> [u8; 16] {
     };
     ipv6_addr_bytes(addr)
 }
-
 
 #[cfg(not(test))]
 #[panic_handler]

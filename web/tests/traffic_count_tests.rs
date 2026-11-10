@@ -243,4 +243,3 @@ async fn test_multiple_protocols_ip6(context: &TestContext) {
     assert!(metrics.contains("outgoing_traffic_count{protocol=\"UDP\"} 30"));
     assert!(metrics.contains("outgoing_traffic_count{protocol=\"Other\"} 30"));
 }
-

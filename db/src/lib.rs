@@ -1,7 +1,10 @@
 use std::{fmt::Debug, time::Duration};
 
 use noct_models::EventMsg;
-use tokio::{sync::mpsc::UnboundedReceiver, task::{JoinError, JoinSet}};
+use tokio::{
+    sync::mpsc::UnboundedReceiver,
+    task::{JoinError, JoinSet},
+};
 
 /// Contains structures that map to rows in the db.
 pub mod rows;
@@ -73,7 +76,8 @@ fn log_flush_result(res: Result<anyhow::Result<()>, JoinError>) {
 }
 
 pub async fn log_batch<T>(batch: Vec<T>) -> anyhow::Result<()>
-where T: Debug,
+where
+    T: Debug,
 {
     tracing::debug!("batch: {:?}", batch);
     Ok(())

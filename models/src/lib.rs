@@ -13,12 +13,10 @@ pub mod protocol;
 /// Contains utilities for working with the different models of the app.
 mod utils;
 
-pub use {
-    addr_type::AddrType,
-    conn_count::ConnectionCount,
-    conn_retrans::ConnectionRetrans,
-    conn_srtt::ConnectionSRTT,
-    packet_event::PacketEvent,
-    protocol::IpProto
-};
+pub use addr_type::AddrType;
+pub use conn_count::ConnectionCount;
+pub use conn_retrans::ConnectionRetrans;
+pub use conn_srtt::ConnectionSRTT;
+pub use packet_event::PacketEvent;
+pub use protocol::IpProto;
 pub use utils::event_msg::EventMsg;

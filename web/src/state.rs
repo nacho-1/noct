@@ -93,8 +93,7 @@ async fn read_active_connections(
 /// otherwise it'll have no protocol values until they are increased,
 /// and therefore the no metric.
 fn init_traffic_counter(name: &str, help: &str) -> anyhow::Result<IntCounterVec> {
-    let counter =
-        IntCounterVec::new(Opts::new(name, help), &["protocol"])?;
+    let counter = IntCounterVec::new(Opts::new(name, help), &["protocol"])?;
 
     // TODO: implement better way to iterate through enum.
     for proto in [
@@ -110,8 +109,7 @@ fn init_traffic_counter(name: &str, help: &str) -> anyhow::Result<IntCounterVec>
 
 /// Initializes a gauge for active connections.
 fn init_connections_gauge(name: &str, help: &str) -> anyhow::Result<IntGaugeVec> {
-    let gauge =
-        IntGaugeVec::new(Opts::new(name, help), &["addressing"])?;
+    let gauge = IntGaugeVec::new(Opts::new(name, help), &["addressing"])?;
 
     for addr_type in ["IPv4", "IPv6"] {
         gauge.with_label_values(&[addr_type]);

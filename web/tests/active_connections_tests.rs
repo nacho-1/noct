@@ -112,4 +112,3 @@ async fn test_connections_ending(context: &TestContext) {
     assert!(metrics.contains("active_connections{addressing=\"IPv4\"} 0"));
     assert!(metrics.contains("active_connections{addressing=\"IPv6\"} 0"));
 }
-

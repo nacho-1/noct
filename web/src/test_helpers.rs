@@ -145,12 +145,7 @@ pub async fn setup() -> TestContext {
     let (ingress_stats_tx, ingress_stats_rx) = mpsc::unbounded_channel();
     let (egress_stats_tx, egress_stats_rx) = mpsc::unbounded_channel();
     let (conn_count_tx, conn_count_rx) = mpsc::unbounded_channel();
-    let app_state =
-        state::init_app_state(
-            ingress_stats_rx,
-            egress_stats_rx,
-            conn_count_rx,
-        )
+    let app_state = state::init_app_state(ingress_stats_rx, egress_stats_rx, conn_count_rx)
         .await
         .expect("must initialize app state");
     let app = routes::init_routes(app_state);

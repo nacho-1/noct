@@ -8,4 +8,3 @@ pub struct ConnectionCount {
     /// Number of connections.
     pub count: u32,
 }
-

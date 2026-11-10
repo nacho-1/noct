@@ -1,9 +1,14 @@
 use anyhow::Context;
-use aya::{Ebpf, maps::{Array, PerfEventArray}};
+use aya::{
+    Ebpf,
+    maps::{Array, PerfEventArray},
+};
 use futures::{StreamExt, stream::FuturesUnordered};
 use noct_config::Config;
 use tokio::{
-    signal::{self, unix::SignalKind}, sync::{broadcast, mpsc}, task::JoinHandle,
+    signal::{self, unix::SignalKind},
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
 };
 use tracing_panic::panic_hook;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -100,8 +105,8 @@ pub async fn run() -> anyhow::Result<()> {
             ingress_stats_tx,
             shutdown_tx.subscribe(),
         )?
-            .into_iter()
-            .map(|handle| join_task(handle, "ingress traffic reader"))
+        .into_iter()
+        .map(|handle| join_task(handle, "ingress traffic reader")),
     );
     tasks.extend(
         read_event_array::<noct_common::PacketEvent, noct_models::PacketEvent>(
@@ -109,8 +114,8 @@ pub async fn run() -> anyhow::Result<()> {
             egress_stats_tx,
             shutdown_tx.subscribe(),
         )?
-            .into_iter()
-            .map(|handle| join_task(handle, "egress traffic reader"))
+        .into_iter()
+        .map(|handle| join_task(handle, "egress traffic reader")),
     );
     tasks.extend(
         read_event_array::<noct_common::ConnectionSRTT, noct_models::ConnectionSRTT>(
@@ -118,8 +123,8 @@ pub async fn run() -> anyhow::Result<()> {
             srtt_updates_tx,
             shutdown_tx.subscribe(),
         )?
-            .into_iter()
-            .map(|handle| join_task(handle, "srtt reader"))
+        .into_iter()
+        .map(|handle| join_task(handle, "srtt reader")),
     );
     tasks.extend(
         read_event_array::<noct_common::ConnectionRetrans, noct_models::ConnectionRetrans>(
@@ -127,14 +132,16 @@ pub async fn run() -> anyhow::Result<()> {
             retrans_tx,
             shutdown_tx.subscribe(),
         )?
-            .into_iter()
-            .map(|handle| join_task(handle, "retransmissions reader"))
+        .into_iter()
+        .map(|handle| join_task(handle, "retransmissions reader")),
     );
     tasks.push(join_task(
-        tokio::spawn(
-            watch_conn_count(conn_counter, conn_count_tx, shutdown_tx.subscribe())
-        ),
-        "connection count watcher"
+        tokio::spawn(watch_conn_count(
+            conn_counter,
+            conn_count_tx,
+            shutdown_tx.subscribe(),
+        )),
+        "connection count watcher",
     ));
     tasks.push(join_task(
         tokio::spawn(noct_web::run(
@@ -144,21 +151,21 @@ pub async fn run() -> anyhow::Result<()> {
             conn_count_rx,
             shutdown_tx.subscribe(),
         )),
-        "web server"
+        "web server",
     ));
     tasks.push(join_task(
         tokio::spawn(noct_db::batcher(
             srtt_updates_rx,
             noct_db::log_batch::<noct_db::rows::conn_srtt::ConnectionSRTT>,
         )),
-        "srtt event batcher"
+        "srtt event batcher",
     ));
     tasks.push(join_task(
         tokio::spawn(noct_db::batcher(
             retrans_rx,
             noct_db::log_batch::<noct_db::rows::conn_retrans::ConnectionRetrans>,
         )),
-        "srtt event batcher"
+        "srtt event batcher",
     ));
 
     // Wait for application shutdown.
@@ -211,4 +218,3 @@ async fn join_task(handle: JoinHandle<anyhow::Result<()>>, name: &str) {
         }
     }
 }
-

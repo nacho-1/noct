@@ -114,7 +114,6 @@ const _: () = assert!(
     "ConnectionRetrans isn't properly aligned!"
 );
 
-
 /// Encodes IPv4 address as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`.
 #[inline(always)]
 pub fn encode_ip4_addr(addr: Ipv4Addr) -> [u8; 16] {
