@@ -5,15 +5,9 @@ license.workspace = true
 edition.workspace = true
 publish = false
 
-[features]
-test-helpers = ["dep:tokio"]
-
 [dependencies]
-noct-common = { path = "../common" }
+noct-models = { path = "../models" }
 
-either = { workspace = true, default-features = true }
-tokio = { workspace = true, features = ["sync"], optional = true }
-
-[dev-dependencies]
-noct-db = { path = ".", features = ["test-helpers"] }
-
+anyhow = { workspace = true, default-features = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }

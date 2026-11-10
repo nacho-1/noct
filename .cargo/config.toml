@@ -4,4 +4,4 @@ runner = ["bash", "-c",
 	"--"]
 
 [alias]
-test-userspace = "test -p noct-web -p noct-db -p noct-config"
+test-userspace = "test -p noct-web -p noct-models -p noct-config"

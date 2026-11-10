@@ -2,17 +2,28 @@
 
 use core::net::Ipv4Addr;
 
+/// Value for IPv4 addresses.
+pub const IP4_ADDR_TYPE: u8 = 0;
+/// Value for IPv6 addresses.
+pub const IP6_ADDR_TYPE: u8 = 1;
+/// Array element for IPv4 connections counter.
+pub const IP4_CONN_POS: u32 = 0;
+/// Array element for IPv6 connections counter.
+pub const IP6_CONN_POS: u32 = 1;
+
 /// Packet events passed from cgroup_skb programs to userspace via a PerfEventArray.
 ///
+/// IPv4 addresses are stored as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`
+/// IPv6 addresses are stored as the raw 128 bit address.
 /// Direction (ingress or egress) is determined by the array used
 /// (there's one for ingress and another for egress).
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct PacketEvent {
-    /// Source IP address. Only IPv4.
-    pub src_addr: Ipv4Addr,
-    /// Destination IP address. Only IPv4.
-    pub dst_addr: Ipv4Addr,
+    /// Source IP address.
+    pub src_addr: [u8; 16],
+    /// Destination IP address.
+    pub dst_addr: [u8; 16],
     /// Source port. Host endianness.
     pub src_port: u16,
     /// Destination port. Host endianness.
@@ -21,11 +32,16 @@ pub struct PacketEvent {
     pub pkt_len: u16,
     /// Payload length (L4 specified length).
     pub payload_len: u16,
+    /// Address family. 0 = IPv4, 1 = IPv6
+    pub addr_type: u8,
     /// Protocol declared by IP header.
     pub protocol: u8,
     /// Padding. See below.
-    pub _pad: [u8; 3],
+    pub _pad: [u8; 2],
 }
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for PacketEvent {}
 
 /// Program sets `PERF_SAMPLE_RAW` which adds a 32-bit value indicating size of the data.
 /// It then is padded with 0 to have 64-bit alignment.
@@ -38,5 +54,73 @@ const _: () = assert!(
     "PacketEvent isn't properly aligned!"
 );
 
+/// Connection RTT sample passed from sock_ops programs to userspace via a PerfEventArray.
+///
+/// IPv4 addresses are stored as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`
+/// IPv6 addresses are stored as the raw 128 bit address.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ConnectionSRTT {
+    /// Source IP address.
+    pub src_addr: [u8; 16],
+    /// Destination IP address.
+    pub dst_addr: [u8; 16],
+    /// Source port. Host endianness.
+    pub src_port: u16,
+    /// Destination port. Host endianness.
+    pub dst_port: u16,
+    /// Sampled RTT in microseconds.
+    pub srtt: u32,
+    /// Address family. 0 = IPv4, 1 = IPv6
+    pub addr_type: u8,
+    /// Padding for alignment.
+    pub _pad: [u8; 3],
+}
+
 #[cfg(feature = "user")]
-unsafe impl aya::Pod for PacketEvent {}
+unsafe impl aya::Pod for ConnectionSRTT {}
+
+/// Same thing as for [PacketEvent].
+const _: () = assert!(
+    core::mem::size_of::<ConnectionSRTT>() % 8 == 4,
+    "ConnectionRTT isn't properly aligned!"
+);
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ConnectionRetrans {
+    /// Source IP address.
+    pub src_addr: [u8; 16],
+    /// Destination IP address.
+    pub dst_addr: [u8; 16],
+    /// Source port. Host endianness.
+    pub src_port: u16,
+    /// Destination port. Host endianness.
+    pub dst_port: u16,
+    /// Number of segments retransmitted.
+    pub segments: u32,
+    /// Address family. 0 = IPv4, 1 = IPv6
+    pub addr_type: u8,
+    /// Padding for alignment.
+    pub _pad: [u8; 3],
+}
+
+#[cfg(feature = "user")]
+unsafe impl aya::Pod for ConnectionRetrans {}
+
+/// Same thing as for [PacketEvent].
+const _: () = assert!(
+    core::mem::size_of::<ConnectionRetrans>() % 8 == 4,
+    "ConnectionRetrans isn't properly aligned!"
+);
+
+/// Encodes IPv4 address as IPv4-mapped-IPv6: `::FFFF:<IPv4-address>`.
+#[inline(always)]
+pub fn encode_ip4_addr(addr: Ipv4Addr) -> [u8; 16] {
+    let addr = addr.to_bits().to_be_bytes();
+    let mut ret = [0u8; 16];
+    ret[10] = 0xff;
+    ret[11] = 0xff;
+    ret[12..].copy_from_slice(&addr);
+    ret
+}
